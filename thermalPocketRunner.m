@@ -17,9 +17,8 @@ end
                 
 for ii = 1:length(directoryNames)
     savefig = false;
-    rangeAdjustment = false;
     file = "radarData/"+ erase(directoryNames{ii}, [".mat"]);
     thermalPockets;
-    clearvars -except ii directoryNames savefig rangeAdjustment
+    clearvars -except ii directoryNames savefig 
 end
 

@@ -1,3 +1,7 @@
+addpath('lib') 
+radarSpeed = 1.65e8/2; %[m/s] 2 way times, divide speed by 2
+dSpeed = -0.25e8; %[m/s]
+
 ftsize = 14;
 if(file ~= "")
     load(file + ".mat");
@@ -109,12 +113,7 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
         c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
         atten_combo  =@(x,y) (trapz(sig(t_combo(x,y)) .*c2a,2).*dz.*h_init(x,y)./1e3);
         atten_combo2 =@(x,y) (trapz(sig(t_combo2(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
-        
-        % Range Adjustment
-        if(rangeAdjustment)
-            rangeAdjust  =@(x,y) -2*trapz(heaviside(t_combo(x,y)-273.15+.05),2).*dz.*h_init(x,y)*(dSpeed/(radarSpeed^2+radarSpeed*dSpeed))*radarSpeed;
-            rangeAdjust2 =@(x,y) -2*trapz(heaviside(t_combo2(x,y)-273.15+.05),2).*dz.*h_init(x,y)*(dSpeed/(radarSpeed^2+radarSpeed*dSpeed))*radarSpeed;
-        end
+
         % Enhancement Factor []
         E_t =@(x,y) depthIntEnhancement(t_z(x,y),a.^(-3),dz);
         
@@ -136,31 +135,6 @@ if(file ~= "")
     slowtime = 1:numel(Bottom);
     bedPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
     
-    if(rangeAdjustment)
-        range_u = 25; %Each bin is about 3 meters
-        range_d = 75; 
-        dt          = Time(2)-Time(1);
-        bed_i       = floor((Bottom_layer-Time(1))/dt) + 1;
-        bed_i_fil   = bed_i; %bed location with Nans interpolated
-        Bottom_2    = zeros(size(Bottom_layer)); % my pick of bed local
-        bedPower_2  = zeros(size(Bottom_layer)); % my pick of bed power
-
-        x = 1:numel(bed_i);
-        bed_i_fil(isnan(bed_i)) = round(interp1(x(~isnan(bed_i)),bed_i(~isnan(bed_i)),x(isnan(bed_i))));
-        clear x
-
-        for in = 1:numel(bed_i)
-            if(~isnan(bed_i(in)) && bed_i(in) ~= Inf && bed_i(in) > range_u)
-                [bp,bed_2_i] = max(Data_rc(min((bed_i(in)-range_u),size(Data,1)-1):min((bed_i(in)+range_d),size(Data,1)) ,in)); % Find max in neighborhood
-                Bottom_2(in) = Time(bed_2_i+bed_i(in)-range_u-1);              % Find Time of max
-                bedPower_2(in) = 10*log10(bp);              % convert power to dB for plotting
-            elseif(isnan(bed_i(in)))
-                bp = mean(Data_rc(min((bed_i_fil(in)-range_u),size(Data,1)-1):min((bed_i_fil(in)+range_d),size(Data,1)) ,in));
-                bedPower_2(in) = 10*log10(bp);  
-            end
-        end
-    end
-    
     figure('Position',[300 300 1300 900]);
     tiledlayout(2,2,'TileSpacing','compact','Padding','compact')
     x_along = zeros(size(xx));
@@ -171,14 +145,7 @@ if(file ~= "")
     ax(1) = nexttile(2);
         imagesc(x_along*1e-3,Time*radarSpeed,10*log10(Data),'HandleVisibility','off')
         hold on
-%         plot(x_along*1e-3,Surface_layer,'color',rgb('sky blue'),'linewidth',2)
-        if(rangeAdjustment)
-            plot(x_along*1e-3,Bottom_2*radarSpeed,'-','color',rgb('light blue'),'linewidth',1,'HandleVisibility','off')
-            plot(x_along*1e-3,movmean(Bottom_2*radarSpeed,15),'--','color',rgb('blue'),'linewidth',1)
-            plot(x_along*1e-3,Bottom_layer*radarSpeed+rangeAdjust(xx',yy')','-','color',rgb('green'),'linewidth',2)
-            plot(x_along*1e-3,Bottom_layer*radarSpeed+rangeAdjust2(xx',yy')','-','color',rgb('lime green'),'linewidth',2)
-            plot(x_along*1e-3,Bottom_layer*radarSpeed,'-','color',rgb('rose'),'linewidth',2)
-        end       
+%         plot(x_along*1e-3,Surface_layer,'color',rgb('sky blue'),'linewidth',2)    
         
         hold off
         colorbar
@@ -190,44 +157,10 @@ if(file ~= "")
         c.Label.String = 'Power [dB]';
         xlabel('Distance Along Track [km]')
         ylabel('Range [m]')
-        if(rangeAdjustment)
-                legend('Bightest Near Bed','Full Shear Heating Modeled Bed','intermediate Shear Heating Modeled Bed','Published Bed Pick','Location','SouthEast')
-        end
-    
-    
-%         plot(x_along*1e-3,bedPower,'color',rgb('light rose'))
-%         hold on
-% %         plot(x_along*1e-3,bedPower_2,'color',rgb('light red'))
-%         plot(x_along*1e-3,movmean(bedPower,15,'omitnan'),'--','linewidth',2,'color',rgb('dark rose'),'HandleVisibility','off')
-% %         plot(x_along*1e-3,movmean(bedPower_2,15),'--','linewidth',2,'color',rgb('dark red'),'HandleVisibility','off')
-%         title('Range Corrected Bed Power')
-% %         legend('Pub Bed Pick','Paul Pick')
-%         ylabel('dB')
-%         xlabel('Distance Along Track [km]')
-    
-%     subplot(425)
-%         plot(slowtime,atten_combo(xx',yy'),'LineWidth', 3,'color',rgb('ocean blue'))
-%         title('Expected Attenuation')
-%         ylabel('dB')
-    
+
     
     %%
         nexttile(4);
-%         plot(slowtime,Bottom_layer - Surface_layer)
-%         title('Ice thickness along profile')
-%         correct_bd = bedPower + atten_robin(xx',yy')';
-%         plot(x_along*1e-3, correct_bd,'linewidth',1,'color',rgb('rose'))
-%         hold on
-%         plot(x_along([1,end])*1e-3,[mean(correct_bd),mean(correct_bd)],'-','linewidth',1,'color',rgb('Yellow Orange'))
-%         plot(x_along([1,end])*1e-3,[mean(correct_bd)+std(correct_bd),mean(correct_bd)+std(correct_bd)],'--','linewidth',1.5,'color',rgb('Yellow Orange'))
-%         plot(x_along([1,end])*1e-3,[mean(correct_bd)-std(correct_bd),mean(correct_bd)-std(correct_bd)],'--','linewidth',1.5,'color',rgb('Yellow Orange'))
-%         plot(x_along*1e-3,movmean(correct_bd + (atten_combo(xx',yy')'  - atten_robin(xx',yy')'),15),'--','linewidth',1.5,'color',rgb('ocean blue'))
-%         plot(x_along*1e-3,movmean(correct_bd + (atten_combo2(xx',yy')' - atten_robin(xx',yy')'),15),'--','linewidth',1.5,'color',rgb('navy blue') )
-        if(rangeAdjustment)
-            plot(x_along*1e-3,bedPower_2-mean(bedPower_2,'omitnan'),'color',rgb('light blue'),'HandleVisibility','off')
-            hold on
-            plot(x_along*1e-3,movmean(bedPower_2-mean(bedPower_2,'omitnan'),15),'--','linewidth',2,'color',rgb('dark blue'),'HandleVisibility','off')
-        end
         plot(x_along*1e-3,bedPower-mean(bedPower,'omitnan'),'color',rgb('light rose'),'HandleVisibility','off')
         hold on
         plot(x_along*1e-3,movmean(bedPower-mean(bedPower,'omitnan'),15),'--','linewidth',2,'color',rgb('dark rose'),'HandleVisibility','off')
@@ -250,7 +183,7 @@ if(file ~= "")
         atDiff = reshape(atten_diff(Xi(:),Yi(:)),numel(Xi(:,1)),numel(Xi(1,:)));
         surf(xi*1e-3,yi*1e-3,zeros(size(atDiff')),atDiff','edgecolor', 'none');
         view(2)
-        if(exists(cbrewer ==2)) %% Enable plotting without cbrewer
+        if(exist('cbrewer.m','file') == 2) %% Enable plotting without cbrewer
             Bls = cbrewer('seq','Blues',64);
             Ors = cbrewer('seq','Oranges',256);
             colormap(ax(2),[Bls;Ors(129:end,:)])
