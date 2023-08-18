@@ -9,7 +9,7 @@ directoryNames = ["Data_20131126_01_029",... %% paper figs
                     "Data_20131126_01_031"];
 
 if(exist("radarData/Data_20131126_01_029.mat",'file')~=2)
-    warning('Missing radar data, downloading now');
+    warning('Missing radar data, downloading samples from (Summers et al., 2023) now');
     system('bash lib/downloadCReSIS.sh');
     disp('Download Finished') ;
 end
