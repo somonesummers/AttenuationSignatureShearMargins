@@ -265,6 +265,8 @@ if(file ~= "")
         mapzoompskm('nw','km') % Must run this after labelTilesLayout, turn
     %     off for 3 figure runs
         if(savefig)
+            beep()
+            disp('Please manually adjust position of legend before continuing')
             pause; %Manually adjust location of legend if issue
             savePng("figs/" + erase(file, ["radarData_good/","Data_"]))
             close %close figure after saving to save memory
