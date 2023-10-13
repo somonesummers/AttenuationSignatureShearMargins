@@ -1,11 +1,14 @@
 addpath('lib') 
 radarSpeed = 1.65e8/2; %[m/s] 2 way times, divide speed by 2
 dSpeed = -0.25e8; %[m/s]
+lbOverride = false;
+
 
 ftsize = 14;
 if(file ~= "")
     load(file + ".mat");
     load(file + "_Layers.mat")
+    str = strsplit(file,"_");
     [start(1),start(2)] = ll2ps(Latitude(1),Longitude(1));
     [stop(1),stop(2)]   = ll2ps(Latitude(end),Longitude(end));
     cushion = 75e3;
@@ -52,10 +55,19 @@ T = T_s(xy(:,1),xy(:,2));
 bm_b =  bedmachine_interp('bed',Xi,Yi);
 bm_s =  bedmachine_interp('surface',Xi,Yi);
 [u,v] = measures_interp('velocity',xy(:,1),xy(:,2)); %[m/yr]
+% Interpolate within NAN values for better estimates of strain
+uInterp = scatteredInterpolant(xy(~isnan(u),1),xy(~isnan(u),2),u(~isnan(u)));
+vInterp = scatteredInterpolant(xy(~isnan(v),1),xy(~isnan(v),2),v(~isnan(v)));
+u(isnan(u)) = uInterp(xy(isnan(u),1),xy(isnan(u),2));
+v(isnan(v)) = vInterp(xy(isnan(v),2),xy(isnan(v),2));
+clear uInterp vInterp
+
+
 [spd] = measures_interp('speed',Xi,Yi)'; %[m/yr]
 u = u/3.154e7;
 v = v/3.154e7;
-%% Smoothing option
+%% Smoothing
+% Numerator is the window we're smoothing over in [m], spacing of these grids
 
 smoothbed = bm_b;%imgaussfilt(bm_b,smth/dx);
 smoothsurf = bm_s;%imgaussfilt(bm_s,smth/dx);
@@ -75,11 +87,17 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
         % Peclet number  [ ]
         Pe =@(x,y) rho*C_p.*Acc(x,y).*subplus(h_s_init(x,y)-h_b_init(x,y))./K;
 
-        % Horizonal Peclet number  [ ]
+        % Vertical Peclet number  [ ]
 %         La =@(x,y) lambda(x,y).*subplus(h_s_init(x,y)-h_b_init(x,y)).^2./(K*(T_m-T_s(x,y)));
         La  =@(x,y) zeros(size(x)); %no advection case
-        La2 =@(x,y) .25*Br(x,y); % Moderate advection
-%         La2 =@(x,y) 2*Br(x,y); % strong advection
+        
+        if(exist('LambdaOverride','var') == 1)
+            lbOverride = true;
+            La2 =@(x,y) LambdaOverride; % Tuned advection cases
+        else
+            La2 =@(x,y) .25*abs(Br(x,y)); % Moderate advection
+        end
+%         La2 =@(x,y) .8*Br(x,y); % strong advection
         
         % Critical Strain [s^-1]
         ep_star  =@(x,y) ((La(x,y)/2  + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
@@ -89,6 +107,9 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
         % Temp profile at xy [K]
         t_z  =@(x,y) tempProfile(ep_dot(x,y),ep_star(x,y) ,Pe(x,y),Br(x,y),La(x,y), T_s(x,y),T_m,dz); 
         t_z2 =@(x,y) tempProfile(ep_dot(x,y),ep_star2(x,y),Pe(x,y),Br(x,y),La2(x,y),T_s(x,y),T_m,dz); 
+        
+        % Geothermal heat flux
+%         Geo =@(x,y) 50e-3; % geothermal heat flux, W/m^2
         
         % Robin temp profile from Rezvanbehbahani2019. I've capped at 0C.
         % (z = 0 is bed)
@@ -113,53 +134,60 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
         c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
         atten_combo  =@(x,y) (trapz(sig(t_combo(x,y)) .*c2a,2).*dz.*h_init(x,y)./1e3);
         atten_combo2 =@(x,y) (trapz(sig(t_combo2(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
-
-        % Enhancement Factor []
-        E_t =@(x,y) depthIntEnhancement(t_z(x,y),a.^(-3),dz);
         
         % Difference in attenuation 
         atten_diff =@(x,y) atten_combo(x,y) - atten_robin(x,y);
-        
-        % Mean Temp [K]
-        T_bar = @(x,y) trapz(t_z(x,y),2)*dz;
 
-%% Plotting, allow cross section        
+%% Plotting
 
 if(file ~= "")
     Surface_layer = layerData{1}.value{2}.data;
     Bottom_layer = layerData{2}.value{2}.data;
-    
-    Data_rc = Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct, sometimes Time is weird dimensions for old data (pre 2014)
-    %Assume center frequency of 190Mhz, Lambda = 1.56 m. See CReSES Documentation
-    
+    Bottom_infill = Bottom_layer;
+    if(~isreal(Data))
+        warning('Complex Data, taking ABS, this is rare and odd')
+        Data = abs(Data);
+    end
+    if(str2double(extractBefore(str(2),5)) > 2011)
+        Data_rc = Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct
+    else
+        Data_rc = Data.*(2*4*pi*abs(Time'*3e8).^2 /1.56); %Range correct, sometimes Time is weird dimensions for old data (pre 2012)
+    end
+    %Assume center frequency of 190Mhz, Lambda = 1.56 m. See MCoRDS
+    %Documentation
+ 
     slowtime = 1:numel(Bottom);
     bedPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
     
-    figure('Position',[300 300 1300 900]);
+%     exclude extremely off bed values
+    bedPower(abs(bedPower - mean(bedPower,'omitnan')) > 50) = nan;
+    
+    figure('Position',[300 300 1400 900]);
     tiledlayout(2,2,'TileSpacing','compact','Padding','compact')
     x_along = zeros(size(xx));
-    for i = 1:length(xx)
-        x_along(i) = sqrt((xx(1) - xx(i))^2 + (yy(1) - yy(i))^2);
+    for i = 2:length(xx)
+        x_along(i) = x_along(i-1) + sqrt((xx(i-1) - xx(i))^2 + (yy(i-1) - yy(i))^2); % get length for nonlinear routes
     end   
     
     ax(1) = nexttile(2);
         imagesc(x_along*1e-3,Time*radarSpeed,10*log10(Data),'HandleVisibility','off')
-        hold on
-%         plot(x_along*1e-3,Surface_layer,'color',rgb('sky blue'),'linewidth',2)    
-        
-        hold off
-        colorbar
         colormap(ax(1), (gray))
         caxis([-180, -50])
         ylim([(min(Surface_layer) - 5e-6)*radarSpeed, (max(Bottom_layer)+1e-5)*radarSpeed])
         title("Radargram" + " " + erase(file,'radarData_good/Data_'),'Interpreter','none')
-        c = colorbar;
+        c = colorbar('southoutside');
         c.Label.String = 'Power [dB]';
         xlabel('Distance Along Track [km]')
         ylabel('Range [m]')
+        yyaxis right
+        plot(x_along*1e-3,measures_interp('speed',xx,yy),'linewidth',2)
+%         ylim([0 5000]) Don't force scale for single plots
+        ylabel('Surface Speed [m/yr]')
+        ax = gca;
+        ax.YAxis(1).Color = 'k'; %Force left to be black, default blue
+        ax.YAxis(1).Scale = 'linear';
+        ax.YAxis(2).Scale = 'linear';
 
-    
-    %%
         nexttile(4);
         plot(x_along*1e-3,bedPower-mean(bedPower,'omitnan'),'color',rgb('light rose'),'HandleVisibility','off')
         hold on
@@ -175,20 +203,20 @@ if(file ~= "")
         title('Signal Compared to Expected Attenuation')
         ylabel('Power [dB]')
         xlabel('Distance Along Track [km]')
-        legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','SouthEast')
- %%   
-    
-    ax(2) = nexttile(1);
-    
+        if(lbOverride)
+            legend('No Shear Heating','Tuned Shear Heating','Full Shear Heating','Location','SouthEast');
+        else
+            legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','SouthEast');
+        end
+        xlim([0, x_along(end)]*1e-3)
+ 
+        ax(2) = nexttile(1);
         atDiff = reshape(atten_diff(Xi(:),Yi(:)),numel(Xi(:,1)),numel(Xi(1,:)));
         surf(xi*1e-3,yi*1e-3,zeros(size(atDiff')),atDiff','edgecolor', 'none');
         view(2)
-        if(exist('cbrewer.m','file') == 2) %% Enable plotting without cbrewer
-            Bls = cbrewer('seq','Blues',64);
-            Ors = cbrewer('seq','Oranges',256);
-            colormap(ax(2),[Bls;Ors(129:end,:)])
-        end
-            
+        Bls = cbrewer('seq','Blues',64);
+        Ors = cbrewer('seq','Oranges',256);
+        colormap(ax(2),[Bls;Ors(129:end,:)])
         caxis([0 30])
         hold on
         plot(xx*1e-3,yy*1e-3,'r*-','linewidth',2)
@@ -228,14 +256,17 @@ if(file ~= "")
         xlabel('Distance Along Track [km]')
         caxis([min(T_s(xx,yy))-273.15, 0])
         title('Modeled Temperature Profile (Full Shear Heating)')
-        if(exist('iceColorMap.mat','file') == 2) % custom colormap
-            load iceColorMap
-            colormap(ax(3), iceColorMap)
+        load iceColorMap
+        colormap(ax(3), iceColorMap)
+        drawnow
+        setFontSize(18)
+        labelTiledLayout(gcf,24)
+        nexttile(1)
+        mapzoompskm('nw','km') % Must run this after labelTilesLayout, turn
+    %     off for 3 figure runs
+        if(savefig)
+            pause; %Manually adjust location of legend if issue
+            savePng("figs/" + erase(file, ["radarData_good/","Data_"]))
+            close %close figure after saving to save memory
         end
-    setFontSize(18) % custom font sizing script
-    labelTiledLayout(gcf,24)
-    
-    if(savefig)
-        savePng("figs/GeoCorrected" + erase(file, ["radarData_good/","Data_"])) %custom PNG output file
-    end
 end
