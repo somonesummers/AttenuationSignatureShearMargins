@@ -1,5 +1,5 @@
-function [int] = calcTrigridStrain(u,v,xy,dx)
-    % Calculates strain on triangular nodes, returns on intpolation
+function [int] = calcStrain(u,v,xy,dx)
+    % Calculates strain from any list of points, returns on intpolation
     % function
     % elements
     xi = min(xy(:,1))-dx:dx:max(xy(:,1))+dx;

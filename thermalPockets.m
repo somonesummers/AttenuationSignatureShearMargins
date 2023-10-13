@@ -79,7 +79,7 @@ h_s_init = griddedInterpolant(Xi,Yi,smoothsurf);
 h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
 
 %% Meyer Model
-        ep_dot = calcTrigridStrain(u,v,xy,dx); %returns intperolation object
+        ep_dot = calcStrain(u,v,xy,dx); %returns intperolation object
 
         % Brinkman number [ ]
         Br =@(x,y) 2*subplus(h_s_init(x,y)-h_b_init(x,y)).^2./(K*(T_m-T_s(x,y))).*((subplus(ep_dot(x,y)).^(nn+1))/A_m).^(1/nn);
