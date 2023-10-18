@@ -2,6 +2,7 @@ clc
 close all
 clear
 
+% directoryNames = ["Data_20131126_01_047"];  %% 
 
 directoryNames = ["Data_20121023_04_077",... %% paper Mary Byrd
                     "Data_20111014_07_022",...
@@ -23,9 +24,10 @@ end
                 
                 
 for ii = 1:length(directoryNames)
-    savefig = false;
+    savefig = true;
     file = "radarData/"+ erase(directoryNames{ii}, [".mat"]);
+    plotFigs = true;
     thermalPockets;
-    clearvars -except ii directoryNames savefig 
+    clearvars -except ii directoryNames savefig plotFigs
 end
 

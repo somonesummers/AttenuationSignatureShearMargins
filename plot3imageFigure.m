@@ -2,18 +2,18 @@ clc
 close all
 clear
 
-for i = 1:3
-    if(i == 1)
+for loopi = 1:3
+    if(loopi == 1)
     directoryNames = ["Data_20131126_01_031",... %% paper siple figure 3
                         "Data_20131126_01_042",...
                         "Data_20131126_01_047",...
                         ];
-    elseif(i == 2)
+    elseif(loopi == 2)
     directoryNames = ["Data_20181010_02_006",... %% paper Coats and Queens figure 4
                         "Data_20141115_06_006",...
                         "Data_20181018_01_008",...
                         ];
-    elseif(i ==3)          
+    elseif(loopi ==3)          
     directoryNames = ["Data_20121023_04_077",... %% paper ASE figure 5
                         "Data_20111014_07_022",...
                         "Data_20181115_01_024",...
@@ -27,7 +27,8 @@ for i = 1:3
         figure(1) 
         savefig = false;
         rangeAdjustment = false;
-        file = "radarData_good/"+ erase(directoryNames{ii}, [".mat"]);
+        plotFigs = false;
+        file = "radarData/"+ erase(directoryNames{ii}, [".mat"]);
         thermalPockets;
 
         ax(ii) = nexttile(tiles,ii, [1 1]);
@@ -38,7 +39,7 @@ for i = 1:3
         colormap(ax(ii), (gray))
         caxis([-180, -50])
         ylim([(min(Surface_layer) - 5e-6)*radarSpeed, (max(Bottom_layer)+1e-5)*radarSpeed])
-        title(erase(file,'radarData_good/Data_'),'Interpreter','none')
+        title(erase(file,'radarData/Data_'),'Interpreter','none')
         c = colorbar('southoutside');
         c.Label.String = 'Power [dB]';
         xlabel('Distance Along Track [km]')
@@ -47,12 +48,14 @@ for i = 1:3
         end
         yyaxis right
         plot(x_along*1e-3,measures_interp('speed',xx,yy),'linewidth',2)
-        if(i == 3)
+        if(loopi == 3)
             ylim([0 5000]) % max is 500 for Siple/CoatsQueens 5000 for ASE
         else
             ylim([0 500])
         end
-        ylabel('Surface Speed [m/yr]')
+        if(ii == 3)
+            ylabel('Surface Speed [m/yr]')
+        end
         ax = gca;
         ax.YAxis(1).Color = 'k'; %Force left to be black, default blue
         topxlim = xlim(); % match x axis
@@ -72,7 +75,7 @@ for i = 1:3
     %     title('Signal Compared to Expected Attenuation')
         xlim(topxlim) % match x axis from above
         if(ii == 1)
-            ylabel('Power [dB]')
+            ylabel('Relative Power [dB]')
             legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','NorthEast')
         end
         xlabel('Distance Along Track [km]')
@@ -81,7 +84,7 @@ for i = 1:3
 
 
 
-        clearvars -except ii directoryNames savefig rangeAdjustment tiles
+        clearvars -except ii directoryNames savefig rangeAdjustment tiles loopi
     end
 
     setFontSize(18)
@@ -90,11 +93,12 @@ for i = 1:3
     beep()
     disp('Please manually adjust position of legend before continuing')
     pause %check on figure, adjust
-    if(i == 3)
+    if(loopi == 3)
         savePng('figs/threeImageFigureASE')
-    elseif(i ==2)
+    elseif(loopi == 2)
         savePng('figs/threeImageFigureCoatsQueens')
-    elseif(i == 1)
+    elseif(loopi == 1)
         savePng('figs/threeImageFigureSiple')
     end
+    close
 end

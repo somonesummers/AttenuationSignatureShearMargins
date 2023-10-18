@@ -13,8 +13,8 @@ curl https://data.cresis.ku.edu/data/rds/2013_Antarctica_P3/CSARP_layerData/2013
 curl https://data.cresis.ku.edu/data/rds/2013_Antarctica_P3/CSARP_mvdr/20131126_01/Data_20131126_01_042.mat --output Data_20131126_01_042.mat
 curl https://data.cresis.ku.edu/data/rds/2013_Antarctica_P3/CSARP_layerData/20131126_01/Data_20131126_01_042.mat --output Data_20131126_01_042_Layers.mat
 
-curl https://data.cresis.ku.edu/data/rds/2013_Antarctica_P3/CSARP_mvdr/20131126_01/Data_20131126_01_042.mat --output Data_20131126_01_047.mat
-curl https://data.cresis.ku.edu/data/rds/2013_Antarctica_P3/CSARP_layerData/20131126_01/Data_20131126_01_042.mat --output Data_20131126_01_047_Layers.mat
+curl https://data.cresis.ku.edu/data/rds/2013_Antarctica_P3/CSARP_mvdr/20131126_01/Data_20131126_01_047.mat --output Data_20131126_01_047.mat
+curl https://data.cresis.ku.edu/data/rds/2013_Antarctica_P3/CSARP_layerData/20131126_01/Data_20131126_01_047.mat --output Data_20131126_01_047_Layers.mat
 
 curl https://data.cresis.ku.edu/data/rds/2014_Antarctica_DC8/CSARP_mvdr/20141115_06/Data_20141115_06_006.mat --output Data_20141115_06_006.mat
 curl https://data.cresis.ku.edu/data/rds/2014_Antarctica_DC8/CSARP_layerData/20141115_06/Data_20141115_06_006.mat --output Data_20141115_06_006_Layers.mat

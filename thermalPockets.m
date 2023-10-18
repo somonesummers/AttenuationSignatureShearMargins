@@ -143,6 +143,7 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
 if(file ~= "")
     Surface_layer = layerData{1}.value{2}.data;
     Bottom_layer = layerData{2}.value{2}.data;
+    Bottom_layer_Q = layerData{2}.quality;
     Bottom_infill = Bottom_layer;
     if(~isreal(Data))
         warning('Complex Data, taking ABS, this is rare and odd')
@@ -162,113 +163,122 @@ if(file ~= "")
 %     exclude extremely off bed values
     bedPower(abs(bedPower - mean(bedPower,'omitnan')) > 50) = nan;
     
-    figure('Position',[300 300 1400 900]);
-    tiledlayout(2,2,'TileSpacing','compact','Padding','compact')
     x_along = zeros(size(xx));
     for i = 2:length(xx)
         x_along(i) = x_along(i-1) + sqrt((xx(i-1) - xx(i))^2 + (yy(i-1) - yy(i))^2); % get length for nonlinear routes
     end   
     
-    ax(1) = nexttile(2);
-        imagesc(x_along*1e-3,Time*radarSpeed,10*log10(Data),'HandleVisibility','off')
-        colormap(ax(1), (gray))
-        caxis([-180, -50])
-        ylim([(min(Surface_layer) - 5e-6)*radarSpeed, (max(Bottom_layer)+1e-5)*radarSpeed])
-        title("Radargram" + " " + erase(file,'radarData_good/Data_'),'Interpreter','none')
-        c = colorbar('southoutside');
-        c.Label.String = 'Power [dB]';
-        xlabel('Distance Along Track [km]')
-        ylabel('Range [m]')
-        yyaxis right
-        plot(x_along*1e-3,measures_interp('speed',xx,yy),'linewidth',2)
-%         ylim([0 5000]) Don't force scale for single plots
-        ylabel('Surface Speed [m/yr]')
-        ax = gca;
-        ax.YAxis(1).Color = 'k'; %Force left to be black, default blue
-        ax.YAxis(1).Scale = 'linear';
-        ax.YAxis(2).Scale = 'linear';
+    if(plotFigs == true)
+        figure('Position',[300 300 1400 900]);
+        tiledlayout(2,2,'TileSpacing','compact','Padding','compact')
 
-        nexttile(4);
-        plot(x_along*1e-3,bedPower-mean(bedPower,'omitnan'),'color',rgb('light rose'),'HandleVisibility','off')
-        hold on
-        plot(x_along*1e-3,movmean(bedPower-mean(bedPower,'omitnan'),15),'--','linewidth',2,'color',rgb('dark rose'),'HandleVisibility','off')
-        
-        plot(x_along([1,end])*1e-3,[0,0],'-','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
-        plot(x_along([1,end])*1e-3,[2*std(bedPower,'omitnan'),2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
-        plot(x_along([1,end])*1e-3,[-2*std(bedPower,'omitnan'),-2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
-        
-        plot(x_along*1e-3,-atten_robin(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('sky blue'))
-        plot(x_along*1e-3,-atten_combo2(xx',yy')' + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('ocean blue'))
-        plot(x_along*1e-3,-atten_combo(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('navy blue'))
-        title('Signal Compared to Expected Attenuation')
-        ylabel('Power [dB]')
-        xlabel('Distance Along Track [km]')
-        if(lbOverride)
-            legend('No Shear Heating','Tuned Shear Heating','Full Shear Heating','Location','SouthEast');
-        else
-            legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','SouthEast');
-        end
-        xlim([0, x_along(end)]*1e-3)
- 
-        ax(2) = nexttile(1);
-        atDiff = reshape(atten_diff(Xi(:),Yi(:)),numel(Xi(:,1)),numel(Xi(1,:)));
-        surf(xi*1e-3,yi*1e-3,zeros(size(atDiff')),atDiff','edgecolor', 'none');
-        view(2)
-        Bls = cbrewer('seq','Blues',64);
-        Ors = cbrewer('seq','Oranges',256);
-        colormap(ax(2),[Bls;Ors(129:end,:)])
-        caxis([0 30])
-        hold on
-        plot(xx*1e-3,yy*1e-3,'r*-','linewidth',2)
-        scatter(xx(1)*1e-3,yy(1)*1e-3,100,'kp')
-        contour(xi*1e-3,yi*1e-3,spd, [10, 10] , 'k:','HandleVisibility','off')
-        contour(xi*1e-3,yi*1e-3,spd, [30, 30] , 'k--','HandleVisibility','off')
-        contour(xi*1e-3,yi*1e-3,spd, [100, 300, 3000] , 'k-','HandleVisibility','off')
-        contour(xi*1e-3,yi*1e-3,spd, [1000, 1000] , 'k-','LineWidth',2)
-        c = colorbar;
-        c.Label.String = 'Additional Englacial Attenuation [dB]';
-        ylabel('Northing [km]')
-        xlabel('Easting [km]')
-        c.FontSize = ftsize+2;   
-        view(2)
-        f = gca;
-        f.XAxis.FontSize = ftsize;
-        f.YAxis.FontSize = ftsize;
-        title('Map view of transect')
-    
-    ax(3) = nexttile(3);
-        tempM = t_combo(xx',yy')'-273.15;
-        height = zeros(size(tempM));
-        x_along2 = zeros(size(tempM));
-        for i = 1:length(xx)
-            height(:,i) = h_b_init(xx(i),yy(i)) + (0:dz:1)'*h_init(xx(i),yy(i));
-            x_along2(:,i) = sqrt((xx(1) - xx(i))^2 + (yy(1) - yy(i))^2);
-        end   
-        surf(x_along2*1e-3, height, tempM,'edgecolor', 'none');
-        hold on
-        [C,H] = contour(x_along2*1e-3, height, tempM, [-0,-0],'linewidth',2,'color',rgb('rust orange'));
-        clabel(C,H);
-        view(2)
-        scatter(0,h_b_init(xx(1),yy(1))-100,100,'kp')
-        c = colorbar;
-        c.Label.String = 'Temp [C]';
-        ylabel('elevation [m ASL]')
-        xlabel('Distance Along Track [km]')
-        caxis([min(T_s(xx,yy))-273.15, 0])
-        title('Modeled Temperature Profile (Full Shear Heating)')
-        load iceColorMap
-        colormap(ax(3), iceColorMap)
-        drawnow
-        setFontSize(18)
-        labelTiledLayout(gcf,24)
-        nexttile(1)
-        mapzoompskm('nw','km') % Must run this after labelTilesLayout, turn
-    %     off for 3 figure runs
+
+        ax(1) = nexttile(2);
+            imagesc(x_along*1e-3,Time*radarSpeed,10*log10(Data),'HandleVisibility','off')
+            colormap(ax(1), (gray))
+            caxis([-180, -50])
+            ylim([(min(Surface_layer) - 5e-6)*radarSpeed, (max(Bottom_layer)+1e-5)*radarSpeed])
+            title(erase(file,'radarData/Data_'),'Interpreter','none')
+            c = colorbar('southoutside');
+            c.Label.String = 'Power [dB]';
+            xlabel('Distance Along Track [km]')
+            ylabel('Range [m]')
+            yyaxis right
+            plot(x_along*1e-3,measures_interp('speed',xx,yy),'linewidth',2)
+    %         ylim([0 5000]) Don't force scale for single plots
+            ylabel('Surface Speed [m/yr]')
+            ax = gca;
+            ax.YAxis(1).Color = 'k'; %Force left to be black, default blue
+            ax.YAxis(1).Scale = 'linear';
+            ax.YAxis(2).Scale = 'linear';
+
+            nexttile(4);
+            plot(x_along*1e-3,bedPower-mean(bedPower,'omitnan'),'color',rgb('light rose'),'HandleVisibility','off')
+            hold on
+            plot(x_along*1e-3,movmean(bedPower-mean(bedPower,'omitnan'),15),'--','linewidth',2,'color',rgb('dark rose'),'HandleVisibility','off')
+
+
+    %         plot(x_along(Bottom_layer_Q == 1)*1e-3,zeros(size(x_along(Bottom_layer_Q == 1))),'-','linewidth',1,'color',rgb('green'),'HandleVisibility','off')
+    %         plot(x_along(Bottom_layer_Q == 2)*1e-3,zeros(size(x_along(Bottom_layer_Q == 2))),'-','linewidth',1,'color',rgb('yellow'),'HandleVisibility','off')       
+    %         plot(x_along(Bottom_layer_Q == 3)*1e-3,zeros(size(x_along(Bottom_layer_Q == 3))),'-','linewidth',1,'color',rgb('red'),'HandleVisibility','off')       
+            plot(x_along([1,end])*1e-3,[0,0],'-','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
+            plot(x_along([1,end])*1e-3,[2*std(bedPower,'omitnan'),2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
+            plot(x_along([1,end])*1e-3,[-2*std(bedPower,'omitnan'),-2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
+
+            plot(x_along*1e-3,-atten_robin(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('sky blue'))
+            plot(x_along*1e-3,-atten_combo2(xx',yy')' + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('ocean blue'))
+            plot(x_along*1e-3,-atten_combo(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('navy blue'))
+            title('Bed Power Compared to Modeled Attenuation')
+            ylabel('Relative Power [dB]')
+            xlabel('Distance Along Track [km]')
+            if(lbOverride)
+                legend('No Shear Heating','Tuned Shear Heating','Full Shear Heating','Location','SouthEast');
+            else
+                legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','SouthEast');
+            end
+            xlim([0, x_along(end)]*1e-3)
+
+            ax(2) = nexttile(1);
+            atDiff = reshape(atten_diff(Xi(:),Yi(:)),numel(Xi(:,1)),numel(Xi(1,:)));
+            surf(xi*1e-3,yi*1e-3,zeros(size(atDiff')),atDiff','edgecolor', 'none');
+            view(2)
+            Bls = cbrewer('seq','Blues',64);
+            Ors = cbrewer('seq','Oranges',256);
+            colormap(ax(2),[Bls;Ors(129:end,:)])
+            caxis([0 30])
+            hold on
+            plot(xx*1e-3,yy*1e-3,'r*-','linewidth',2)
+            scatter(xx(1)*1e-3,yy(1)*1e-3,100,'kp')
+            contour(xi*1e-3,yi*1e-3,spd, [10, 10] , 'k:','HandleVisibility','off')
+            contour(xi*1e-3,yi*1e-3,spd, [30, 30] , 'k--','HandleVisibility','off')
+            contour(xi*1e-3,yi*1e-3,spd, [100, 300, 3000] , 'k-','HandleVisibility','off')
+            contour(xi*1e-3,yi*1e-3,spd, [1000, 1000] , 'k-','LineWidth',2)
+            c = colorbar;
+            c.Label.String = 'Attentuation from Shear Heating [dB]';
+            ylabel('Northing [km]')
+            xlabel('Easting [km]')
+            c.FontSize = ftsize+2;   
+            view(2)
+            f = gca;
+            f.XAxis.FontSize = ftsize;
+            f.YAxis.FontSize = ftsize;
+            title('Map View of Transect')
+
+        ax(3) = nexttile(3);
+            tempM = t_combo(xx',yy')'-273.15;
+    %         max(max(tempM))
+            height = zeros(size(tempM));
+            x_along2 = zeros(size(tempM));
+            for i = 1:length(xx)
+                height(:,i) = h_b_init(xx(i),yy(i)) + (0:dz:1)'*h_init(xx(i),yy(i));
+                x_along2(:,i) = sqrt((xx(1) - xx(i))^2 + (yy(1) - yy(i))^2);
+            end   
+            surf(x_along2*1e-3, height, tempM,'edgecolor', 'none');
+            hold on
+            [C,H] = contour(x_along2*1e-3, height, tempM, [-0,-0],'linewidth',2,'color',rgb('rust orange'));
+            clabel(C,H);
+            view(2)
+            scatter(0,h_b_init(xx(1),yy(1))-100,100,'kp')
+            c = colorbar;
+            c.Label.String = 'Temperature [C]';
+            ylabel('Elevation [m ASL]')
+            xlabel('Distance Along Track [km]')
+            caxis([min(T_s(xx,yy))-273.15, 0])
+            title('Modeled Temperature Profile (Full Shear Heating)')
+            load iceColorMap
+            colormap(ax(3), iceColorMap)
+            drawnow
+            setFontSize(18)
+            labelTiledLayout(gcf,24)
+            nexttile(1)
+            mapzoompskm('nw','km')
+            
         if(savefig)
             beep()
             disp('Please manually adjust position of legend before continuing')
             pause; %Manually adjust location of legend if issue
-            savePng("figs/" + erase(file, ["radarData_good/","Data_"]))
+            savePng("figs/" + erase(file, ["radarData/","Data_"]))
             close %close figure after saving to save memory
         end
+    end
 end
