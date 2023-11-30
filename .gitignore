@@ -3,5 +3,6 @@
 GEOTHERMAL/*
 ALBMAP/*
 radarData/*
+radarData_*
 figs/*
 figs_processing/*
