@@ -21,3 +21,5 @@ Running "thermalPocketRunner.m" as configured now will produce Figure 2 in the m
 
 Running "plot3imageFigue.m" will produce figures 3,4 from the main text, though figure 3 will be produce in 2 separate plots of 3 radar lines each. 
 
+For both of these scripts, if you select to save figures, MATLAB will pause for you to reposition the legends manually. You can do this by click and dragging the legend with your cursor. Then press any key to continue the script. 
+

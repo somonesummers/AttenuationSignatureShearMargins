@@ -3,7 +3,7 @@ close all
 clear
 addpath lib
 
-directoryNames = ["Data_20131126_01_029"];  % MacAyeal fig 1
+directoryNames = ["Data_20131126_01_029"];  % MacAyeal Fig 2
 
 % All files in Supp 
 % directoryNames = ["Data_20131126_01_029",... 
@@ -33,7 +33,7 @@ for ii = 1:length(directoryNames)
     Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
     plotFigs = true;
     thermalPockets; %processing like Figure 2 of the text
-%     thermalPocketsSupp; %processing like the supplemental figures
+    thermalPocketsSupp; %processing like the supplemental figures
     clearvars -except ii directoryNames savefig plotFigs Geo Acc T_s
 end
 
