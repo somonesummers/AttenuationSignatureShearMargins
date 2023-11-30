@@ -6,16 +6,17 @@ lbOverride = false;
 
 ftsize = 14;
 if(file ~= "")
-    load(file + ".mat");
-    load(file + "_Layers.mat")
+    load("radarData_mv/" + file + ".mat");
+    load("radarData_mv/" + file + "_Layers.mat")
     str = strsplit(file,"_");
     [start(1),start(2)] = ll2ps(Latitude(1),Longitude(1));
     [stop(1),stop(2)]   = ll2ps(Latitude(end),Longitude(end));
-    cushion = 75e3;
+    cushion = 150e3; %75
+    aspectRatioSet = 0.5778; %1
     xmax = mean([start(1) stop(1)])+cushion;
     xmin = mean([start(1) stop(1)])-cushion;
-    ymax = mean([start(2) stop(2)])+cushion;
-    ymin = mean([start(2) stop(2)])-cushion;
+    ymax = mean([start(2) stop(2)])+cushion * aspectRatioSet;
+    ymin = mean([start(2) stop(2)])-cushion * aspectRatioSet;
 end
 
 dist  = stop-start;
@@ -49,8 +50,8 @@ k_b     = 8.617e-5;           % boltzmann constant [eV K^{-1}]
 dz = .005;  %vertical resolution of thermal depth profiles (frac of H) [ ]
 
 %% Import data and smooth 
-[Acc, T_s] = loadALBMAP(); %accumulation rate and surface temp [m/s] [K]
-Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
+% [Acc, T_s] = loadALBMAP(); %accumulation rate and surface temp [m/s] [K]
+% Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
 T = T_s(xy(:,1),xy(:,2));
 bm_b =  bedmachine_interp('bed',Xi,Yi);
 bm_s =  bedmachine_interp('surface',Xi,Yi);
@@ -95,7 +96,8 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
             lbOverride = true;
             La2 =@(x,y) LambdaOverride; % Tuned advection cases
         else
-            La2 =@(x,y) .25*abs(Br(x,y)); % Moderate advection
+%             La2 =@(x,y) .25*abs(Br(x,y)); % Moderate advection
+            La2 =@(x,y) .5*abs(Br(x,y)); % Hills advection
         end
 %         La2 =@(x,y) .8*Br(x,y); % strong advection
         
@@ -145,6 +147,10 @@ if(file ~= "")
     Bottom_layer = layerData{2}.value{2}.data;
     Bottom_layer_Q = layerData{2}.quality;
     Bottom_infill = Bottom_layer;
+    
+    Bottom_layer_up = Bottom_layer - 10*(Time(2)-Time(1));
+    Bottom_layer_dw = Bottom_layer + 10*(Time(2)-Time(1));
+    
     if(~isreal(Data))
         warning('Complex Data, taking ABS, this is rare and odd')
         Data = abs(Data);
@@ -157,11 +163,18 @@ if(file ~= "")
     %Assume center frequency of 190Mhz, Lambda = 1.56 m. See MCoRDS
     %Documentation
  
-    slowtime = 1:numel(Bottom);
-    bedPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
+    slowtime  = 1:numel(Bottom);
+    bedPower  = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
+    surfPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Surface_layer,'nearest'));
+    bedPowerUp = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_up,'nearest'));
+    bedPowerDw = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_dw,'nearest'));
     
 %     exclude extremely off bed values
     bedPower(abs(bedPower - mean(bedPower,'omitnan')) > 50) = nan;
+%     set mean of surfacePower,bedPowerUp/Dw to 0
+%     surfPower  = surfPower - mean(surfPower,'omitnan');
+%     bedPowerUp = bedPowerUp - mean(bedPowerUp,'omitnan');
+%     bedPowerDw = bedPowerDw - mean(bedPowerDw,'omitnan');
     
     x_along = zeros(size(xx));
     for i = 2:length(xx)
@@ -177,6 +190,10 @@ if(file ~= "")
             imagesc(x_along*1e-3,Time*radarSpeed,10*log10(Data),'HandleVisibility','off')
             colormap(ax(1), (gray))
             caxis([-180, -50])
+            hold on
+%             plot(x_along*1e-3,Surface_layer*radarSpeed,'color',rgb('dark sky blue'))
+%             plot(x_along*1e-3,Bottom_layer_up*radarSpeed,'color',rgb('dark lime green'))
+%             plot(x_along*1e-3,Bottom_layer_dw*radarSpeed,'color',rgb('dark lavender'))
             ylim([(min(Surface_layer) - 5e-6)*radarSpeed, (max(Bottom_layer)+1e-5)*radarSpeed])
             title(erase(file,'radarData/Data_'),'Interpreter','none')
             c = colorbar('southoutside');
@@ -196,7 +213,13 @@ if(file ~= "")
             plot(x_along*1e-3,bedPower-mean(bedPower,'omitnan'),'color',rgb('light rose'),'HandleVisibility','off')
             hold on
             plot(x_along*1e-3,movmean(bedPower-mean(bedPower,'omitnan'),15),'--','linewidth',2,'color',rgb('dark rose'),'HandleVisibility','off')
-
+%             plot(x_along*1e-3,movmean((bedPower + surfPower) - mean(bedPower + surfPower,'omitnan'),15),'-','linewidth',1,'color',rgb('dark lavender'),'HandleVisibility','on')
+%             plot(x_along*1e-3,movmean((bedPower - bedPowerUp) - mean(bedPower - bedPowerUp,'omitnan'),15),'-','linewidth',1,'color',rgb('dusty orange'),'HandleVisibility','on')
+%             plot(x_along*1e-3,movmean((bedPower - bedPowerUp + surfPower) - mean(bedPower - bedPowerUp + surfPower,'omitnan'),15),'-','linewidth',1,'color',rgb('dark lime green'),'HandleVisibility','on')
+            
+%             meanPlot(x_along*1e-3, bedPower + surfPower, 15, "sky blue")
+%             meanPlot(x_along*1e-3, bedPower - bedPowerUp, 15, "lavender")
+%             meanPlot(x_along*1e-3, bedPower - bedPowerDw, 15, "lime green")
 
     %         plot(x_along(Bottom_layer_Q == 1)*1e-3,zeros(size(x_along(Bottom_layer_Q == 1))),'-','linewidth',1,'color',rgb('green'),'HandleVisibility','off')
     %         plot(x_along(Bottom_layer_Q == 2)*1e-3,zeros(size(x_along(Bottom_layer_Q == 2))),'-','linewidth',1,'color',rgb('yellow'),'HandleVisibility','off')       
@@ -205,16 +228,16 @@ if(file ~= "")
             plot(x_along([1,end])*1e-3,[2*std(bedPower,'omitnan'),2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
             plot(x_along([1,end])*1e-3,[-2*std(bedPower,'omitnan'),-2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
 
-            plot(x_along*1e-3,-atten_robin(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('sky blue'))
-            plot(x_along*1e-3,-atten_combo2(xx',yy')' + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('ocean blue'))
-            plot(x_along*1e-3,-atten_combo(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('navy blue'))
+            plot(x_along*1e-3,-atten_robin(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('sky blue'),'HandleVisibility','on')
+            plot(x_along*1e-3,-atten_combo2(xx',yy')' + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('ocean blue'),'HandleVisibility','on')
+            plot(x_along*1e-3,-atten_combo(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('navy blue'),'HandleVisibility','on')
             title('Bed Power Compared to Modeled Attenuation')
             ylabel('Relative Power [dB]')
             xlabel('Distance Along Track [km]')
             if(lbOverride)
                 legend('No Shear Heating','Tuned Shear Heating','Full Shear Heating','Location','SouthEast');
             else
-                legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','SouthEast');
+                legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','SouthEast');                  
             end
             xlim([0, x_along(end)]*1e-3)
 
@@ -228,7 +251,7 @@ if(file ~= "")
             caxis([0 30])
             hold on
             plot(xx*1e-3,yy*1e-3,'r*-','linewidth',2)
-            scatter(xx(1)*1e-3,yy(1)*1e-3,100,'kp')
+            scatter(xx(1)*1e-3,yy(1)*1e-3,250,'kp','filled')
             contour(xi*1e-3,yi*1e-3,spd, [10, 10] , 'k:','HandleVisibility','off')
             contour(xi*1e-3,yi*1e-3,spd, [30, 30] , 'k--','HandleVisibility','off')
             contour(xi*1e-3,yi*1e-3,spd, [100, 300, 3000] , 'k-','HandleVisibility','off')
@@ -242,6 +265,7 @@ if(file ~= "")
             f = gca;
             f.XAxis.FontSize = ftsize;
             f.YAxis.FontSize = ftsize;
+%             axis equal
             title('Map View of Transect')
 
         ax(3) = nexttile(3);
@@ -258,7 +282,7 @@ if(file ~= "")
             [C,H] = contour(x_along2*1e-3, height, tempM, [-0,-0],'linewidth',2,'color',rgb('rust orange'));
             clabel(C,H);
             view(2)
-            scatter(0,h_b_init(xx(1),yy(1))-100,100,'kp')
+            scatter(0,h_b_init(xx(1),yy(1))-100,250,'kp','filled')
             c = colorbar;
             c.Label.String = 'Temperature [C]';
             ylabel('Elevation [m ASL]')
