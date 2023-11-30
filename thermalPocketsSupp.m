@@ -442,7 +442,9 @@ if(file ~= "")
             drawnow
             
         if(savefig)
-                
+            if(exist('figs_processing','dir')~= 7)
+                mkdir figs_processing
+            end    
             beep()
             disp('Please manually adjust position of legend before continuing')
             pause; %Manually adjust location of legend if issue

@@ -14,10 +14,10 @@ cbrewer will greatly improve plotting
 ALBMAP, Shen Geothermal data, and CReSIS data will auto-download for you upon first run using bash curl commands. 
 
 Input
-This code can be in run series using "thermalPocketRunner.m" 
+This code can be in run series using "thermalPocketRunner.m" You can choose to run standard processing which produces figures in the style of figure 2 of the text using "thermalPockets.m", or run the advanced processing which produces figures like the supplemental figures using "thermalPocketsSupp.m". 
 
 Output
-Running "thermalPocketRunner.m" as configured now will produce figures like figure 2 in the manuscript for each of the 4 radar lines discussed in the manuscript, returning full model results for each radar line. 
+Running "thermalPocketRunner.m" as configured now will produce Figure 2 in the manuscript. Uncommenting lines 9-18 and line 36 will produce figures like the supplemental figures.
 
-
+Running "plot3imageFigue.m" will produce figures 3,4 from the main text, though figure 3 will be produce in 2 separate plots of 3 radar lines each. 
 

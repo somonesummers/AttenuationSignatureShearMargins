@@ -19,7 +19,7 @@ for loopi = 1:3
                         "Data_20111014_07_022",...
                         "Data_20181115_01_024",...
                         ];
-    titleNames = [ "Middle PIG","Upper PIG", "Thwaites"]; 
+    titleNames = ["Middle PIG","Upper PIG","Thwaites"]; 
     end
 
     figure('Position',[300 300 1800 700]);
@@ -102,6 +102,9 @@ for loopi = 1:3
     beep()
     disp('Please manually adjust position of legend before continuing')
     pause %check on figure, adjust
+    if(exist('figs','dir')~= 7)
+        mkdir figs
+    end  
     if(loopi == 3)
         savePng('figs/threeImageFigureASE')
     elseif(loopi == 2)

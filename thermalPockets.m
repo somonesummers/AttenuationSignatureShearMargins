@@ -97,7 +97,7 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
             La2 =@(x,y) LambdaOverride; % Tuned advection cases
         else
 %             La2 =@(x,y) .25*abs(Br(x,y)); % Moderate advection
-            La2 =@(x,y) .5*abs(Br(x,y)); % Hills advection
+            La2 =@(x,y) .5*abs(Br(x,y)); % Hills et al advection
         end
 %         La2 =@(x,y) .8*Br(x,y); % strong advection
         
@@ -298,6 +298,9 @@ if(file ~= "")
             mapzoompskm('nw','km')
             
         if(savefig)
+            if(exist('figs','dir')~= 7)
+                mkdir figs
+            end
             beep()
             disp('Please manually adjust position of legend before continuing')
             pause; %Manually adjust location of legend if issue

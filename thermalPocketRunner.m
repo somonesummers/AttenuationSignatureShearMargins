@@ -1,8 +1,9 @@
 clc
 close all
 clear
+addpath lib
 
-% directoryNames = ["Data_20131126_01_029"];  % MacAyeal fig 1
+directoryNames = ["Data_20131126_01_029"];  % MacAyeal fig 1
 
 % All files in Supp 
 % directoryNames = ["Data_20131126_01_029",... 
@@ -17,12 +18,12 @@ clear
 %                     "Data_20181115_01_024"];  
                  
 
-% if(exist("radarData/Data_20131126_01_029.mat",'file')~=2)
-%     % I can download these files for you to get you started
-%     warning('Missing radar data, downloading samples from (Summers et al., 2023) now');
-%     system('bash lib/downloadCReSIS.sh');
-%     disp('Download Finished') ;
-% end
+if(exist("radarData_mv/Data_20131126_01_029.mat",'file')~=2)
+    % I can download these files for you to get you started
+    warning('Missing radar data, downloading samples from (Summers et al., 2023) now');
+    system('bash lib/downloadCReSIS.sh');
+    disp('Download Finished') ;
+end
                 
                 
 for ii = 1:length(directoryNames)
@@ -31,9 +32,8 @@ for ii = 1:length(directoryNames)
     [Acc, T_s] = loadALBMAP(); %accumulation rate and surface temp [m/s] [K]
     Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
     plotFigs = true;
-%     detailedRun = true;
-%     thermalPockets;
-    thermalPocketsSupp;
-    clearvars -except ii directoryNames savefig plotFigs detailedRun Geo Acc T_s
+    thermalPockets; %processing like Figure 2 of the text
+%     thermalPocketsSupp; %processing like the supplemental figures
+    clearvars -except ii directoryNames savefig plotFigs Geo Acc T_s
 end
 
