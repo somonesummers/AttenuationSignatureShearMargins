@@ -4,31 +4,36 @@ clear
 
 for loopi = 1:3
     if(loopi == 1)
-    directoryNames = ["Data_20131126_01_031",... %% paper siple figure 3
+    directoryNames = ["Data_20131126_01_031",... %% paper siple figure 3 top
                         "Data_20131126_01_042",...
-                        "Data_20131126_01_047",...
-                        ];
+                        "Data_20131126_01_047"];
+    titleNames = ["Lower Bindschadler", "Upper Bindschadler", "Upper MacAyeal"];                   
     elseif(loopi == 2)
-    directoryNames = ["Data_20181010_02_006",... %% paper Coats and Queens figure 4
+    directoryNames = ["Data_20181010_02_006",... %% paper Coats and Queens figure 4 bot
                         "Data_20141115_06_006",...
                         "Data_20181018_01_008",...
                         ];
+    titleNames = ["Slessor", "Institute", "Recovery"]; 
     elseif(loopi ==3)          
-    directoryNames = ["Data_20121023_04_077",... %% paper ASE figure 5
+    directoryNames = ["Data_20121023_04_077",... %% paper ASE figure 4
                         "Data_20111014_07_022",...
                         "Data_20181115_01_024",...
                         ];
+    titleNames = [ "Middle PIG","Upper PIG", "Thwaites"]; 
     end
 
     figure('Position',[300 300 1800 700]);
     tiles = tiledlayout(2,3,'TileSpacing','compact','Padding','compact');
 
+    [Acc, T_s] = loadALBMAP(); %accumulation rate and surface temp [m/s] [K]
+    Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
+    
     for ii = 1:length(directoryNames)
         figure(1) 
         savefig = false;
         rangeAdjustment = false;
         plotFigs = false;
-        file = "radarData/"+ erase(directoryNames{ii}, [".mat"]);
+        file = erase(directoryNames{ii}, [".mat"]);
         thermalPockets;
 
         ax(ii) = nexttile(tiles,ii, [1 1]);
@@ -39,7 +44,8 @@ for loopi = 1:3
         colormap(ax(ii), (gray))
         caxis([-180, -50])
         ylim([(min(Surface_layer) - 5e-6)*radarSpeed, (max(Bottom_layer)+1e-5)*radarSpeed])
-        title(erase(file,'radarData/Data_'),'Interpreter','none')
+%         title(erase(file,'radarData/Data_'),'Interpreter','none')
+        title(titleNames(ii));
         c = colorbar('southoutside');
         c.Label.String = 'Power [dB]';
         xlabel('Distance Along Track [km]')
@@ -84,12 +90,15 @@ for loopi = 1:3
 
 
 
-        clearvars -except ii directoryNames savefig rangeAdjustment tiles loopi
+        clearvars -except ii directoryNames savefig rangeAdjustment tiles loopi Geo Acc T_s titleNames
     end
 
     setFontSize(18)
-
-    labelTiledLayout(gcf,24)
+    if(loopi == 2)
+        labelTiledLayout(gcf,24,6)
+    else
+        labelTiledLayout(gcf,24)
+    end
     beep()
     disp('Please manually adjust position of legend before continuing')
     pause %check on figure, adjust
