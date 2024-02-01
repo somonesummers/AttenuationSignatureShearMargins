@@ -79,14 +79,25 @@ h_b_init = griddedInterpolant(Xi,Yi,smoothbed);
 h_s_init = griddedInterpolant(Xi,Yi,smoothsurf);
 h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
 
+% Radar picked bed location
+Surface_layer = layerData{1}.value{2}.data;
+Bottom_layer = layerData{2}.value{2}.data;
+h_radar_array = (Bottom_layer - Surface_layer) * radarSpeed;
+if(max(isnan(h_radar_array)) == 1)
+    h_radar_array = cleanNan(xx,yy,h_radar_array); %intpolate out missing bed points
+    disp('Interpolated out NANs of missing bed pick')
+end
+h_radar = scatteredInterpolant(xx',yy',h_radar_array');
 %% Meyer Model
         ep_dot = calcStrain(u,v,xy,dx); %returns intperolation object
 
         % Brinkman number [ ]
         Br =@(x,y) 2*subplus(h_s_init(x,y)-h_b_init(x,y)).^2./(K*(T_m-T_s(x,y))).*((subplus(ep_dot(x,y)).^(nn+1))/A_m).^(1/nn);
+        Br_r =@(x,y) 2*subplus(h_radar(x,y)).^2./(K*(T_m-T_s(x,y))).*((subplus(ep_dot(x,y)).^(nn+1))/A_m).^(1/nn);
 
         % Peclet number  [ ]
         Pe =@(x,y) rho*C_p.*Acc(x,y).*subplus(h_s_init(x,y)-h_b_init(x,y))./K;
+        Pe_r =@(x,y) rho*C_p.*Acc(x,y).*subplus(h_radar(x,y))./K;
 
         % Vertical Peclet number  [ ]
 %         La =@(x,y) lambda(x,y).*subplus(h_s_init(x,y)-h_b_init(x,y)).^2./(K*(T_m-T_s(x,y)));
@@ -106,9 +117,15 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
         .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_s_init(x,y)-h_b_init(x,y))).^2)).^(nn/(nn+1));
         ep_star2 =@(x,y) ((La2(x,y)/2 + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
         .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_s_init(x,y)-h_b_init(x,y))).^2)).^(nn/(nn+1));
+        ep_star_r  =@(x,y) ((La(x,y)/2  + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
+        .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_radar(x,y))).^2)).^(nn/(nn+1));
+        ep_star2_r =@(x,y) ((La2(x,y)/2 + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
+        .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_radar(x,y))).^2)).^(nn/(nn+1));
         % Temp profile at xy [K]
         t_z  =@(x,y) tempProfile(ep_dot(x,y),ep_star(x,y) ,Pe(x,y),Br(x,y),La(x,y), T_s(x,y),T_m,dz); 
         t_z2 =@(x,y) tempProfile(ep_dot(x,y),ep_star2(x,y),Pe(x,y),Br(x,y),La2(x,y),T_s(x,y),T_m,dz); 
+        t_z_r  =@(x,y) tempProfile(ep_dot(x,y),ep_star_r(x,y) ,Pe_r(x,y),Br_r(x,y),La(x,y), T_s(x,y),T_m,dz); 
+        t_z2_r =@(x,y) tempProfile(ep_dot(x,y),ep_star2_r(x,y),Pe_r(x,y),Br_r(x,y),La2(x,y),T_s(x,y),T_m,dz); 
         
         % Geothermal heat flux
 %         Geo =@(x,y) 50e-3; % geothermal heat flux, W/m^2
@@ -116,7 +133,9 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
         % Robin temp profile from Rezvanbehbahani2019. I've capped at 0C.
         % (z = 0 is bed)
         q =@(x,y) sqrt(Acc(x,y)./(2.*K_dif.*h_init(x,y)));
+        q_r =@(x,y) sqrt(Acc(x,y)./(2.*K_dif.*h_radar(x,y)));
         t_robin =@(x,y) min(T_s(x,y) - Geo(x,y)*sqrt(pi)./(2*K.*q(x,y)).*(erf((0:dz:1).*h_init(x,y).*q(x,y))-erf(h_init(x,y).*q(x,y))),273.15);
+        t_robin_r =@(x,y) min(T_s(x,y) - Geo(x,y)*sqrt(pi)./(2*K.*q(x,y)).*(erf((0:dz:1).*h_radar(x,y).*q(x,y))-erf(h_radar(x,y).*q(x,y))),273.15);
         
         % sigma(t)
         sig =@(t) sig_p .* exp(E_p./k_b.*(1./T_r - 1./t)); %Pure ice only for now
@@ -124,18 +143,23 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
         % Attenuation
         c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
         atten =@(x,y) (trapz(sig(t_z(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
-        
+        atten_r =@(x,y) (trapz(sig(t_z(x,y)).*c2a,2).*dz.*h_radar(x,y)./1e3);
         % Attenuation
         c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
         atten_robin =@(x,y) (trapz(sig(t_robin(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
+        atten_robin_r =@(x,y) (trapz(sig(t_robin_r(x,y)).*c2a,2).*dz.*h_radar(x,y)./1e3);
         
         % Combo Temp
         t_combo  =@(x,y) max(t_robin(x,y),t_z(x,y) );
         t_combo2 =@(x,y) max(t_robin(x,y),t_z2(x,y));
+        t_combo_r  =@(x,y) max(t_robin_r(x,y),t_z_r(x,y) );
+        t_combo2_r =@(x,y) max(t_robin_r(x,y),t_z2_r(x,y));
         % Combo Attenuation
         c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
         atten_combo  =@(x,y) (trapz(sig(t_combo(x,y)) .*c2a,2).*dz.*h_init(x,y)./1e3);
         atten_combo2 =@(x,y) (trapz(sig(t_combo2(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
+        atten_combo_r  =@(x,y) (trapz(sig(t_combo_r(x,y)) .*c2a,2).*dz.*h_radar(x,y)./1e3);
+        atten_combo2_r =@(x,y) (trapz(sig(t_combo2_r(x,y)).*c2a,2).*dz.*h_radar(x,y)./1e3);
         
         % Difference in attenuation 
         atten_diff =@(x,y) atten_combo(x,y) - atten_robin(x,y);
@@ -228,9 +252,9 @@ if(file ~= "")
             plot(x_along([1,end])*1e-3,[2*std(bedPower,'omitnan'),2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
             plot(x_along([1,end])*1e-3,[-2*std(bedPower,'omitnan'),-2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
 
-            plot(x_along*1e-3,-atten_robin(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('sky blue'),'HandleVisibility','on')
-            plot(x_along*1e-3,-atten_combo2(xx',yy')' + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('ocean blue'),'HandleVisibility','on')
-            plot(x_along*1e-3,-atten_combo(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('navy blue'),'HandleVisibility','on')
+            plot(x_along*1e-3,-atten_robin_r(xx',yy')'  + mean(atten_robin_r(xx',yy')),'linewidth',2,'color',rgb('sky blue'),'HandleVisibility','on')
+            plot(x_along*1e-3,-atten_combo2_r(xx',yy')' + mean(atten_robin_r(xx',yy')),'linewidth',2,'color',rgb('ocean blue'),'HandleVisibility','on')
+            plot(x_along*1e-3,-atten_combo_r(xx',yy')'  + mean(atten_robin_r(xx',yy')),'linewidth',2,'color',rgb('navy blue'),'HandleVisibility','on')
             title('Bed Power Compared to Modeled Attenuation')
             ylabel('Relative Power [dB]')
             xlabel('Distance Along Track [km]')
@@ -274,7 +298,7 @@ if(file ~= "")
             height = zeros(size(tempM));
             x_along2 = zeros(size(tempM));
             for i = 1:length(xx)
-                height(:,i) = h_b_init(xx(i),yy(i)) + (0:dz:1)'*h_init(xx(i),yy(i));
+                height(:,i) = h_s_init(xx(i),yy(i)) - (1:-dz:0)'*h_radar(xx(i),yy(i));
                 x_along2(:,i) = sqrt((xx(1) - xx(i))^2 + (yy(1) - yy(i))^2);
             end   
             surf(x_along2*1e-3, height, tempM,'edgecolor', 'none');
@@ -282,7 +306,7 @@ if(file ~= "")
             [C,H] = contour(x_along2*1e-3, height, tempM, [-0,-0],'linewidth',2,'color',rgb('rust orange'));
             clabel(C,H);
             view(2)
-            scatter(0,h_b_init(xx(1),yy(1))-100,250,'kp','filled')
+            scatter(0,h_s_init(xx(1),yy(1))-100,250,'kp','filled')
             c = colorbar;
             c.Label.String = 'Temperature [C]';
             ylabel('Elevation [m ASL]')
