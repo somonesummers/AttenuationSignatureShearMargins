@@ -5,8 +5,14 @@ lbOverride = false;
 qlook_load = false;
 ftsize = 14;
 if(file ~= "")
-    load("radarData_mv/" + file + ".mat");
-    load("radarData_mv/" + file + "_Layers.mat");
+    try
+        load("radarData_mv/" + file + ".mat");
+        load("radarData_mv/" + file + "_Layers.mat");
+    catch
+        disp('MVDR Unavailable, using standard')
+        load("radarData_std/" + file + ".mat");
+        load("radarData_std/" + file + "_Layers.mat");
+    end
     strd     = load("radarData_std/" + file + ".mat");
     strd_lay = load("radarData_std/" + file + "_Layers.mat");
     try
@@ -92,8 +98,9 @@ h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
 Surface_layer = layerData{1}.value{2}.data;
 Bottom_layer = layerData{2}.value{2}.data;
 h_radar_array = (Bottom_layer - Surface_layer) * radarSpeed;
+h_radar_array(isinf(h_radar_array)) = nan;
 if(max(isnan(h_radar_array)) == 1)
-    h_radar_array = cleanNan(xx,yy,h_radar_array); %intpolate out missing bed points
+    h_radar_array = fillmissing(h_radar_array,'linear'); %intpolate out missing bed points
     disp('Interpolated out NANs of missing bed pick')
 end
 h_radar = scatteredInterpolant(xx',yy',h_radar_array');
@@ -200,53 +207,19 @@ if(file ~= "")
     
     if(str2double(extractBefore(str(2),5)) > 2011)
         Data_rc = Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct
-        strd_Data_rc = strd.Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct
+        strd_Data_rc = strd.Data.*(2*4*pi*abs(strd.Time*3e8).^2 /1.56); %Range correct
         if(qlook_load)
-            qlook_Data_rc = qlook.Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct
+            qlook_Data_rc = qlook.Data.*(2*4*pi*abs(qlook.Time*3e8).^2 /1.56); %Range correct
         end
     else
         Data_rc = Data.*(2*4*pi*abs(Time'*3e8).^2 /1.56); %Range correct, sometimes Time is weird dimensions for old data (pre 2012)
-        strd_Data_rc = strd.Data.*(2*4*pi*abs(Time'*3e8).^2 /1.56); %Range correct
+        strd_Data_rc = strd.Data.*(2*4*pi*abs(strd.Time'*3e8).^2 /1.56); %Range correct
         if(qlook_load)
-            qlook_Data_rc = qlook.Data.*(2*4*pi*abs(Time'*3e8).^2 /1.56); %Range correct
+            qlook_Data_rc = qlook.Data.*(2*4*pi*abs(qlook.Time'*3e8).^2 /1.56); %Range correct
         end
     end
     %Assume center frequency of 190Mhz, Lambda = 1.56 m. See MCoRDS
     %Documentation
-    slowtime  = 1:numel(Bottom);
-    if(qlook_load)
-        slowtime_qlook  = 1:numel(qlook.Surface);
-        Bottom_layer_qlook = interp1(slowtime,Bottom_layer,slowtime_qlook);
-        Surface_layer_qlook = interp1(slowtime,Surface_layer,slowtime_qlook);
-        Bottom_layer_up_qlook = Bottom_layer_qlook - 10*(Time(2)-Time(1));
-        Bottom_layer_dw_qlook = Bottom_layer_qlook + 10*(Time(2)-Time(1));
-        qlook_bedPower   = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Bottom_layer_qlook,'nearest'));
-        qlook_surfPower  = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Surface_layer_qlook,'nearest'));
-        qlook_bedPowerUp = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Bottom_layer_up_qlook,'nearest'));
-        qlook_bedPowerDw = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Bottom_layer_dw_qlook,'nearest'));
-    end
-    
-    bedPower  = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
-    surfPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Surface_layer,'nearest'));
-    
-   
-    surface_ind = round((Surface_layer(1,:)-Time(1))/(Time(2)-Time(1))+1);
-
-    bedPowerUp = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_up,'nearest'));
-    bedPowerDw = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_dw,'nearest'));
-    surfPowerTop = sum(Data_rc((surface_ind + 1):(surface_ind + 100),:))/10;
-    
-    strd_bedPower  = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Bottom_layer_strd,'nearest'));
-    strd_surfPower = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Surface_layer,'nearest'));
-    strd_bedPowerUp = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Bottom_layer_up,'nearest'));
-    strd_bedPowerDw = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Bottom_layer_dw,'nearest'));
-    
-%     exclude extremely off bed values
-    bedPower(abs(bedPower - mean(bedPower,'omitnan')) > 50) = nan;
-%     set mean of surfacePower,bedPowerUp/Dw to 0
-%     surfPower  = surfPower - mean(surfPower,'omitnan');
-%     bedPowerUp = bedPowerUp - mean(bedPowerUp,'omitnan');
-%     bedPowerDw = bedPowerDw - mean(bedPowerDw,'omitnan');
     
     x_along = zeros(size(xx));
     for i = 2:length(xx)
@@ -261,9 +234,60 @@ if(file ~= "")
         end
     end
     clear i
+    slowtime  = 1:numel(Bottom);
+    if(qlook_load)
+        slowtime_qlook  = 1:numel(qlook.Surface);
+        Bottom_layer_qlook = interp1(x_along,Bottom_layer,x_along_qlook);
+        Surface_layer_qlook = interp1(x_along,Surface_layer,x_along_qlook);
+        Bottom_layer_up_qlook = Bottom_layer_qlook - 10*(Time(2)-Time(1));
+        Bottom_layer_dw_qlook = Bottom_layer_qlook + 10*(Time(2)-Time(1));
+        qlook_bedPower   = 10*log10(interp2(x_along_qlook,qlook.Time,qlook_Data_rc,x_along_qlook,Bottom_layer_qlook,'nearest'));
+        qlook_surfPower  = 10*log10(interp2(x_along_qlook,qlook.Time,qlook_Data_rc,x_along_qlook,Surface_layer_qlook,'nearest'));
+        qlook_bedPowerUp = 10*log10(interp2(x_along_qlook,qlook.Time,qlook_Data_rc,x_along_qlook,Bottom_layer_up_qlook,'nearest'));
+        qlook_bedPowerDw = 10*log10(interp2(x_along_qlook,qlook.Time,qlook_Data_rc,x_along_qlook,Bottom_layer_dw_qlook,'nearest'));
+    end
+    
+    bedPower  = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
+    surfPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Surface_layer,'nearest'));
+    
+   
+    surface_ind = round((Surface_layer(1,:)-Time(1))/(Time(2)-Time(1))+1);
+
+    bedPowerUp = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_up,'nearest'));
+    bedPowerDw = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_dw,'nearest'));
+    
+    strd_bedPower  = 10*log10(interp2(slowtime,strd.Time,strd_Data_rc,slowtime,Bottom_layer_strd,'nearest'));
+    strd_surfPower = 10*log10(interp2(slowtime,strd.Time,strd_Data_rc,slowtime,Surface_layer,'nearest'));
+    strd_bedPowerUp = 10*log10(interp2(slowtime,strd.Time,strd_Data_rc,slowtime,Bottom_layer_up,'nearest'));
+    strd_bedPowerDw = 10*log10(interp2(slowtime,strd.Time,strd_Data_rc,slowtime,Bottom_layer_dw,'nearest'));
+    
+%     exclude extremely off bed values
+    bedPower(abs(bedPower - mean(bedPower,'omitnan')) > 50) = nan;
+%     set mean of surfacePower,bedPowerUp/Dw to 0
+%     surfPower  = surfPower - mean(surfPower,'omitnan');
+%     bedPowerUp = bedPowerUp - mean(bedPowerUp,'omitnan');
+%     bedPowerDw = bedPowerDw - mean(bedPowerDw,'omitnan');
+    
+    
+    
+    if(qlook_load)
+        qlook_dense = interp1(x_along_qlook,movmean(qlook_bedPower,15*x_along(2)/x_along_qlook(2)),x_along);
+        focusDiff =  abs(movmean((bedPower - mean(bedPower,'omitnan')),15) - (qlook_dense - mean(qlook_dense,'omitnan')));              
+    end
+    clear i
+    
+    if(max(isnan(Bottom_layer)) == 1)
+        Bottom_layer_interp = fillmissing(Bottom_layer,'linear');
+        smoothBed = movmean(Bottom_layer_interp,32); %movemean for 1km length
+    else
+        smoothBed = movmean(Bottom_layer,32); %movemean for 1km length
+    end
+    bedSlope  = (smoothBed(2:end)-smoothBed(1:end-1))./(x_along(2:end)-x_along(1:end-1))*radarSpeed;
+    bedAngle  = atan(bedSlope)*360/(2*pi);
+    
     
     if(plotFigs == true)
-        figure('Position',[300 300 1200 900]); %1400 900
+        figure('Position',[300 300 1200 900],'visible','off'); %1400 900
         tiledlayout(3,2,'TileSpacing','compact','Padding','compact')
         
 %%        
@@ -316,10 +340,17 @@ if(file ~= "")
             title('Bed Power Compared to Modeled Attenuation')
             ylabel('Relative Power [dB]')
             xlabel('Distance Along Track [km]')
-            if(lbOverride)
-                legend('No Shear Heating','Tuned Shear Heating','Full Shear Heating','Location','SouthEast');
+            
+            if(manualCleanUp)
+                legendLoc = 'SouthEast';
             else
-                legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location','SouthEast');                  
+                legendLoc = 'EastOutside';
+            end
+            
+            if(lbOverride)
+                legend('No Shear Heating','Tuned Shear Heating','Full Shear Heating','Location',legendLoc);
+            else
+                legend('No Shear Heating','Intermediate Shear Heating','Full Shear Heating','Location',legendLoc);                  
             end
             xlim([0, x_along(end)]*1e-3)
 
@@ -377,7 +408,7 @@ if(file ~= "")
 %%
             nexttile(5);
             if(qlook_load)
-                meanPlot(x_along_qlook*1e-3, qlook_bedPower, 15, 'lime green','on')
+                meanPlot(x_along_qlook*1e-3, qlook_bedPower, 15*x_along(2)/x_along_qlook(2), 'lime green','on')
             end
             meanPlot(x_along*1e-3, strd_bedPower, 15, 'lavender','on')
             meanPlot(x_along*1e-3, bedPower, 15, 'light rose','on')
@@ -399,17 +430,24 @@ if(file ~= "")
             title('Bed Power By Processing Method')
             ylabel('Relative Power [dB]')
             xlabel('Distance Along Track [km]')
+            
+            if(manualCleanUp)
+                legendLoc = 'SouthWest';
+            else
+                legendLoc = 'EastOutside';
+            end
+            
             if(lbOverride)
-                legend('Qlook','Standard','MVDR','Location','SouthWest');
+                legend('Qlook','Standard','MVDR','Location',legendLoc);
             else
                 if(qlook_load)
                     if(ii == 3)
-                        legend('Qlook','Standard','MVDR','Location','NorthEast');
+                        legend('Qlook','Standard','MVDR','Location',legendLoc);
                     else
-                        legend('Qlook','Standard','MVDR','Location','SouthWest');
+                        legend('Qlook','Standard','MVDR','Location',legendLoc);
                     end
                 else
-                    legend('Standard','MVDR','Location','SouthWest');
+                    legend('Standard','MVDR','Location',legendLoc);
                 end
             end
             xlim([0, x_along(end)]*1e-3)
@@ -420,7 +458,7 @@ if(file ~= "")
             hold on
             plot(x_along*1e-3,-atten_combo2_r(xx',yy')' + mean(atten_robin_r(xx',yy')),'linewidth',2,'color',rgb('ocean blue'),'HandleVisibility','off')
             plot(x_along*1e-3,-atten_combo_r(xx',yy')'  + mean(atten_robin_r(xx',yy')),'linewidth',2,'color',rgb('navy blue'),'HandleVisibility','off')
-           
+            
 %             if(qlook_load)
 %                 plot(x_along_qlook*1e-3, movmean(qlook_bedPower-mean(qlook_bedPower,'omitnan'),15),'color', rgb('dark lime green'),'linewidth',2,'HandleVisibility','off')
 %                 hold on
@@ -435,27 +473,39 @@ if(file ~= "")
             
             plot(x_along*1e-3, movmean(bedPower-mean(bedPower,'omitnan'),15),'--','color', rgb('dark rose'),'linewidth',2,'HandleVisibility','on')
             hold on
-            plot(x_along*1e-3, movmean((bedPower - surfPower) - mean(bedPower - surfPower,'omitnan'),15),'-','linewidth',2,'color', rgb('light rose'),'HandleVisibility','on')
-            plot(x_along*1e-3, movmean((bedPower - bedPowerUp) - mean(bedPower - bedPowerUp,'omitnan'),15),':','linewidth',2,'color', rgb('light rose'),'HandleVisibility','on')
-%             meanPlot(x_along*1e-3, surfPowerTop, 15, "sky blue",'on')
+            plot(x_along*1e-3, movmean((bedPower - surfPower) - mean(bedPower - surfPower,'omitnan'),15),'-','linewidth',1,'color', rgb('light red'),'HandleVisibility','on')
+            plot(x_along*1e-3, movmean((bedPower - bedPowerUp) - mean(bedPower - bedPowerUp,'omitnan'),15),'-','linewidth',1,'color', rgb('light gold'),'HandleVisibility','on')
+            plot((x_along(2:end) + x_along(1:end-1))/2*1e-3, movmean((bedPower(2:end) + 8*log(abs(bedAngle)+1)) - mean(bedPower(2:end) + 8*log(abs(bedAngle)+1),'omitnan'),15),'-','linewidth',1,'color', rgb('light green'),'HandleVisibility','on')
     %         plot(x_along(Bottom_layer_Q == 1)*1e-3,zeros(size(x_along(Bottom_layer_Q == 1))),'-','linewidth',1,'color',rgb('green'),'HandleVisibility','off')
     %         plot(x_along(Bottom_layer_Q == 2)*1e-3,zeros(size(x_along(Bottom_layer_Q == 2))),'-','linewidth',1,'color',rgb('yellow'),'HandleVisibility','off')       
     %         plot(x_along(Bottom_layer_Q == 3)*1e-3,zeros(size(x_along(Bottom_layer_Q == 3))),'-','linewidth',1,'color',rgb('red'),'HandleVisibility','off')       
             plot(x_along([1,end])*1e-3,[0,0],'-','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
             plot(x_along([1,end])*1e-3,[2*std(bedPower,'omitnan'),2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
             plot(x_along([1,end])*1e-3,[-2*std(bedPower,'omitnan'),-2*std(bedPower,'omitnan')],'--','linewidth',1,'color',rgb('Yellow Orange'),'HandleVisibility','off')
-
+            
+            if(qlook_load)
+                x2 = [x_along,fliplr(x_along)];
+                fill(x2*1e-3, fillmissing([movmean((bedPower - mean(bedPower,'omitnan')),15)+focusDiff,...
+                    fliplr(movmean((bedPower - mean(bedPower,'omitnan')),15)-focusDiff)],'constant',0),...
+                    rgb('robin egg blue'),'faceAlpha',.2,'edgeAlpha',0);
+            end
 %             plot(x_along*1e-3,-atten_robin(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('sky blue'),'HandleVisibility','off')
 %             plot(x_along*1e-3,-atten_combo2(xx',yy')' + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('ocean blue'),'HandleVisibility','off')
 %             plot(x_along*1e-3,-atten_combo(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('navy blue'),'HandleVisibility','off')
-            title('Surface Roughness and Clutter')
+            title('Adjusted Bed Power')
             ylabel('Relative Power [dB]')
             xlabel('Distance Along Track [km]')
-
-            if(ii == 3)
-                legend('Bed Power','With Surface Adjustment','With Clutter Adjustment','Location','NorthEast');
+            
+            if(manualCleanUp)
+                legendLoc = 'SouthWest';
             else
-                legend('Bed Power','With Surface Adjustment','With Clutter Adjustment','Location','SouthWest');
+                legendLoc = 'EastOutside';
+            end
+            
+            if(qlook_load)
+                legend('Bed Power','Surface Adjustment','Clutter Adjustment','Slope Adjustment','Focusing Uncertainty','Location',legendLoc);
+            else
+                legend('Bed Power','Surface Adjustment','Clutter Adjustment','Slope Adjustment','Location',legendLoc);
             end
             xlim([0, x_along(end)]*1e-3)
             
@@ -468,16 +518,19 @@ if(file ~= "")
         if(savefig)
             if(exist('figs_processing','dir')~= 7)
                 mkdir figs_processing
-            end    
-            beep()
-            disp('Please manually adjust position of legend before continuing')
-            pause; %Manually adjust location of legend if issue
-            if(ii < 9)
-                savePng("figs_processing/fs0" + (ii+1));
-            else
-                savePng("figs_processing/fs" + (ii+1));
             end
-                
+            if(manualCleanUp)
+                beep()
+                disp('Please manually adjust position of legend before continuing')
+                pause; %Manually adjust location of legend if issue
+                if(ii < 9)
+                    savePng("figs_processing/fs0" + (ii+1));
+                else
+                    savePng("figs_processing/fs" + (ii+1));
+                end
+            else
+                savePng("figs_processing/" + file);  
+            end
             close %close figure after saving to save memory
         end
     end
