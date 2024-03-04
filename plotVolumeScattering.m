@@ -1,0 +1,380 @@
+clear
+addpath('lib') 
+directoryNames = ["Data_20131126_01_029",... 
+                    "Data_20131126_01_031",..."Data_20131126_01_042",...
+                    "Data_20131126_01_047",..."Data_20181010_02_006",...
+                    "Data_20141115_06_006",..."Data_20181018_01_008",... "Data_20181018_01_026",..."Data_20121023_04_077",..."Data_20111014_07_022",...
+                    "Data_20181115_01_024"...
+                    ];  
+% directoryNames = ["Data_20111014_07_022","Data_20121023_04_077"];
+for ii = 1:length(directoryNames)
+    clearvars -except ii directoryNames
+    file = erase(directoryNames{ii}, [".mat"]);
+    savefig = false;
+    [Acc, T_s] = loadALBMAP(); %accumulation rate and surface temp [m/s] [K]
+    Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
+    plotFigs = true;
+%     ii = 3;
+
+    radarSpeed = 1.65e8/2; %[m/s] 2 way times, divide speed by 2
+    dSpeed = -0.25e8; %[m/s]
+    lbOverride = false;
+    qlook_load = false;
+    ftsize = 14;
+    if(file ~= "")
+        load("radarData_mv/" + file + ".mat");
+        load("radarData_mv/" + file + "_Layers.mat");
+        strd     = load("radarData_std/" + file + ".mat");
+        strd_lay = load("radarData_std/" + file + "_Layers.mat");
+        try
+            qlook     = load("radarData_qlook/" + file + ".mat");
+            qlook_lay = load("radarData_qlook/" + file + "_Layers.mat");
+            qlook_load = true;
+        catch
+            qlook = false;
+        end
+        str = strsplit(file,"_");
+        [start(1),start(2)] = ll2ps(Latitude(1),Longitude(1));
+        [stop(1),stop(2)]   = ll2ps(Latitude(end),Longitude(end));
+        cushion = 175e3;
+        xmax = mean([start(1) stop(1)])+cushion;
+        xmin = mean([start(1) stop(1)])-cushion;
+        ymax = mean([start(2) stop(2)])+cushion*0.4739;
+        ymin = mean([start(2) stop(2)])-cushion*0.4739;
+    end
+
+    dist  = stop-start;
+    [xx,yy] = ll2ps(Latitude,Longitude);
+    if(qlook_load)
+        [xx_q,yy_q] = ll2ps(qlook.Latitude,qlook.Longitude);
+    end
+    % Grid to plot around transect
+    dx = .5e3;
+    smth = 10e3;
+    xi = xmin-dx:dx:xmax+dx;
+    yi = ymin-dx:dx:ymax+dx;
+    [Xi,Yi] = ndgrid(xi,yi);
+    xy = [Xi(1:end)',Yi(1:end)'];
+
+    %% Physical parameters
+    % a     = 2e-26^(-1/3);       % a:     flow parameter pre-factor [Pa s^1/3] @-35C from cuffey 
+    nn    = 3;                  % Glens law power
+    % p     = 4/3;                % p:     flow parameter power [ ]
+    % g     = 9.81;               % g:     acceleration due to gravity [m/s^2]
+    % nu    = .4;                 % Thermal relaxation parameter [ ]
+    rho   = 917;                % rho:   density of ice [kg/m^3]
+    % rho_w = 1000;               % rho_w: density of water [kg/m^3]
+    C_p   = 2050;               % specific heat of ice [J/Kg/K]
+    K     = 2.1;                % thermal conductivity of ice [W/m/K]
+    K_dif = 34.4/3.154e7;       % Thermal diffusivity of ice [m^2/s]
+    A_m   = 2.4e-24;            % Meyer's prefactor [Pa^-3 s^-1]
+    T_m   = 273.15;                % Ice melting point [k] 
+    sig_p = 6.6e-6;             % ice conditivity, [S m^{-1}]  Siemens/meter
+    E_p   = 0.55;               % Ice E, [eV]
+    T_r   = 251;                % ref temp [K]
+    k_b     = 8.617e-5;           % boltzmann constant [eV K^{-1}]
+
+    dz = .005;  %vertical resolution of thermal depth profiles (frac of H) [ ]
+
+    %% Import data and smooth 
+    % [Acc, T_s] = loadALBMAP(); %accumulation rate and surface temp [m/s] [K]
+    % Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
+    T = T_s(xy(:,1),xy(:,2));
+    bm_b =  bedmachine_interp('bed',Xi,Yi);
+    bm_s =  bedmachine_interp('surface',Xi,Yi);
+    [u,v] = measures_interp('velocity',xy(:,1),xy(:,2)); %[m/yr]
+    % Interpolate within NAN values for better estimates of strain
+    uInterp = scatteredInterpolant(xy(~isnan(u),1),xy(~isnan(u),2),u(~isnan(u)));
+    vInterp = scatteredInterpolant(xy(~isnan(v),1),xy(~isnan(v),2),v(~isnan(v)));
+    u(isnan(u)) = uInterp(xy(isnan(u),1),xy(isnan(u),2));
+    v(isnan(v)) = vInterp(xy(isnan(v),2),xy(isnan(v),2));
+    clear uInterp vInterp
+
+
+    [spd] = measures_interp('speed',Xi,Yi)'; %[m/yr]
+    u = u/3.154e7;
+    v = v/3.154e7;
+    %% Smoothing
+    % Numerator is the window we're smoothing over in [m], spacing of these grids
+
+    smoothbed = bm_b;%imgaussfilt(bm_b,smth/dx);
+    smoothsurf = bm_s;%imgaussfilt(bm_s,smth/dx);
+    % rectify rock above ice issue, force that ice is non-zero thickness everywhere
+    smoothsurf(smoothbed > smoothsurf) = smoothbed(smoothbed > smoothsurf) + 1; %Pe and Br = 0 result in NaNs
+
+    h_b_init = griddedInterpolant(Xi,Yi,smoothbed);
+    h_s_init = griddedInterpolant(Xi,Yi,smoothsurf);
+    h_init = griddedInterpolant(Xi,Yi,smoothsurf-smoothbed);
+    % Radar picked bed location
+    Surface_layer = layerData{1}.value{2}.data;
+    Bottom_layer = layerData{2}.value{2}.data;
+    h_radar_array = (Bottom_layer - Surface_layer) * radarSpeed;
+    if(max(isnan(h_radar_array)) == 1)
+        h_radar_array = fillmissing(h_radar_array,'linear'); %intpolate out missing bed points
+        disp('Interpolated out NANs of missing bed pick')
+    end
+    h_radar = scatteredInterpolant(xx',yy',h_radar_array');
+
+    %% Meyer Model
+            ep_dot = calcStrain(u,v,xy,dx); %returns intperolation object
+
+            % Brinkman number [ ]
+            Br =@(x,y) 2*subplus(h_s_init(x,y)-h_b_init(x,y)).^2./(K*(T_m-T_s(x,y))).*((subplus(ep_dot(x,y)).^(nn+1))/A_m).^(1/nn);
+            Br_r =@(x,y) 2*subplus(h_radar(x,y)).^2./(K*(T_m-T_s(x,y))).*((subplus(ep_dot(x,y)).^(nn+1))/A_m).^(1/nn);
+
+            % Peclet number  [ ]
+            Pe =@(x,y) rho*C_p.*Acc(x,y).*subplus(h_s_init(x,y)-h_b_init(x,y))./K;
+            Pe_r =@(x,y) rho*C_p.*Acc(x,y).*subplus(h_radar(x,y))./K;
+
+            % Vertical Peclet number  [ ]
+    %         La =@(x,y) lambda(x,y).*subplus(h_s_init(x,y)-h_b_init(x,y)).^2./(K*(T_m-T_s(x,y)));
+            La  =@(x,y) zeros(size(x)); %no advection case
+
+            if(exist('LambdaOverride','var') == 1)
+                lbOverride = true;
+                La2 =@(x,y) LambdaOverride; % Tuned advection cases
+            else
+    %             La2 =@(x,y) .25*abs(Br(x,y)); % Moderate advection
+                La2 =@(x,y) .5*abs(Br(x,y)); % Hills et al advection
+            end
+    %         La2 =@(x,y) .8*Br(x,y); % strong advection
+
+            % Critical Strain [s^-1]
+            ep_star  =@(x,y) ((La(x,y)/2  + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
+            .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_s_init(x,y)-h_b_init(x,y))).^2)).^(nn/(nn+1));
+            ep_star2 =@(x,y) ((La2(x,y)/2 + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
+            .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_s_init(x,y)-h_b_init(x,y))).^2)).^(nn/(nn+1));
+            ep_star_r  =@(x,y) ((La(x,y)/2  + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
+            .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_radar(x,y))).^2)).^(nn/(nn+1));
+            ep_star2_r =@(x,y) ((La2(x,y)/2 + ((Pe(x,y).^2)/2)./(Pe(x,y)-1+exp(-Pe(x,y))))).^(nn/(nn+1))...
+            .*(K*(T_m-T_s(x,y))./(A_m.^(-1/nn).*(subplus(h_radar(x,y))).^2)).^(nn/(nn+1));
+            % Temp profile at xy [K]
+            t_z  =@(x,y) tempProfile(ep_dot(x,y),ep_star(x,y) ,Pe(x,y),Br(x,y),La(x,y), T_s(x,y),T_m,dz); 
+            t_z2 =@(x,y) tempProfile(ep_dot(x,y),ep_star2(x,y),Pe(x,y),Br(x,y),La2(x,y),T_s(x,y),T_m,dz); 
+            t_z_r  =@(x,y) tempProfile(ep_dot(x,y),ep_star_r(x,y) ,Pe_r(x,y),Br_r(x,y),La(x,y), T_s(x,y),T_m,dz); 
+            t_z2_r =@(x,y) tempProfile(ep_dot(x,y),ep_star2_r(x,y),Pe_r(x,y),Br_r(x,y),La2(x,y),T_s(x,y),T_m,dz); 
+
+            % Geothermal heat flux
+    %         Geo =@(x,y) 50e-3; % geothermal heat flux, W/m^2
+
+            % Robin temp profile from Rezvanbehbahani2019. I've capped at 0C.
+            % (z = 0 is bed)
+            q =@(x,y) sqrt(Acc(x,y)./(2.*K_dif.*h_init(x,y)));
+            q_r =@(x,y) sqrt(Acc(x,y)./(2.*K_dif.*h_radar(x,y)));
+            t_robin =@(x,y) min(T_s(x,y) - Geo(x,y)*sqrt(pi)./(2*K.*q(x,y)).*(erf((0:dz:1).*h_init(x,y).*q(x,y))-erf(h_init(x,y).*q(x,y))),273.15);
+            t_robin_r =@(x,y) min(T_s(x,y) - Geo(x,y)*sqrt(pi)./(2*K.*q(x,y)).*(erf((0:dz:1).*h_radar(x,y).*q(x,y))-erf(h_radar(x,y).*q(x,y))),273.15);
+
+            % sigma(t)
+            sig =@(t) sig_p .* exp(E_p./k_b.*(1./T_r - 1./t)); %Pure ice only for now
+
+            % Attenuation
+            c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
+            atten =@(x,y) (trapz(sig(t_z(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
+            atten_r =@(x,y) (trapz(sig(t_z(x,y)).*c2a,2).*dz.*h_radar(x,y)./1e3);
+            % Attenuation
+            c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
+            atten_robin =@(x,y) (trapz(sig(t_robin(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
+            atten_robin_r =@(x,y) (trapz(sig(t_robin_r(x,y)).*c2a,2).*dz.*h_radar(x,y)./1e3);
+
+            % Combo Temp
+            t_combo  =@(x,y) max(t_robin(x,y),t_z(x,y) );
+            t_combo2 =@(x,y) max(t_robin(x,y),t_z2(x,y));
+            t_combo_r  =@(x,y) max(t_robin_r(x,y),t_z_r(x,y) );
+            t_combo2_r =@(x,y) max(t_robin_r(x,y),t_z2_r(x,y));
+            % Combo Attenuation
+            c2a = 2 * 0.912e6; %conversion factor from sigma [S/m] to 2-way antenuation [dB/m], see Macgregor et al 2007 eq (10)
+            atten_combo  =@(x,y) (trapz(sig(t_combo(x,y)) .*c2a,2).*dz.*h_init(x,y)./1e3);
+            atten_combo2 =@(x,y) (trapz(sig(t_combo2(x,y)).*c2a,2).*dz.*h_init(x,y)./1e3);
+            atten_combo_r  =@(x,y) (trapz(sig(t_combo_r(x,y)) .*c2a,2).*dz.*h_radar(x,y)./1e3);
+            atten_combo2_r =@(x,y) (trapz(sig(t_combo2_r(x,y)).*c2a,2).*dz.*h_radar(x,y)./1e3);
+
+            % Difference in attenuation 
+            atten_diff =@(x,y) atten_combo(x,y) - atten_robin(x,y);
+
+    %% Radar products
+
+    if(file ~= "")
+        Surface_layer = layerData{1}.value{2}.data;
+        Bottom_layer = layerData{2}.value{2}.data;
+        Bottom_layer_strd = strd_lay.layerData{2}.value{2}.data;
+        Bottom_layer_Q = layerData{2}.quality;
+        Bottom_infill = Bottom_layer;
+
+        Bottom_layer_up = Bottom_layer - 10*(Time(2)-Time(1));
+        Bottom_layer_dw = Bottom_layer + 10*(Time(2)-Time(1));
+
+        if(~isreal(Data))
+            warning('Complex Data, taking ABS, this is rare and odd')
+            Data = abs(Data);
+        end
+        if(~isreal(strd.Data))
+            warning('Complex Data, taking ABS, this is rare and odd')
+            strd.Data = abs(strd.Data);
+            if(qlook_load)
+                qlook.Data = abs(qlook.Data);
+            end
+        end
+
+        if(str2double(extractBefore(str(2),5)) > 2011)
+            Data_rc = Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct
+            strd_Data_rc = strd.Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct
+            if(qlook_load)
+                qlook_Data_rc = qlook.Data.*(2*4*pi*abs(Time*3e8).^2 /1.56); %Range correct
+            end
+        else
+            Data_rc = Data.*(2*4*pi*abs(Time'*3e8).^2 /1.56); %Range correct, sometimes Time is weird dimensions for old data (pre 2012)
+            strd_Data_rc = strd.Data.*(2*4*pi*abs(Time'*3e8).^2 /1.56); %Range correct
+            if(qlook_load)
+                qlook_Data_rc = qlook.Data.*(2*4*pi*abs(Time'*3e8).^2 /1.56); %Range correct
+            end
+        end
+        %Assume center frequency of 190Mhz, Lambda = 1.56 m. See MCoRDS
+        %Documentation
+        slowtime  = 1:numel(Bottom);
+        if(qlook_load)
+            slowtime_qlook  = 1:numel(qlook.Surface);
+            Bottom_layer_qlook = interp1(slowtime,Bottom_layer,slowtime_qlook);
+            Surface_layer_qlook = interp1(slowtime,Surface_layer,slowtime_qlook);
+            Bottom_layer_up_qlook = Bottom_layer_qlook - 10*(Time(2)-Time(1));
+            Bottom_layer_dw_qlook = Bottom_layer_qlook + 10*(Time(2)-Time(1));
+            qlook_bedPower   = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Bottom_layer_qlook,'nearest'));
+            qlook_surfPower  = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Surface_layer_qlook,'nearest'));
+            qlook_bedPowerUp = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Bottom_layer_up_qlook,'nearest'));
+            qlook_bedPowerDw = 10*log10(interp2(slowtime_qlook,Time,qlook_Data_rc,slowtime_qlook,Bottom_layer_dw_qlook,'nearest'));
+        end
+
+        bedPower  = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
+        surfPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Surface_layer,'nearest'));
+
+
+        surface_ind = round((Surface_layer(1,:)-Time(1))/(Time(2)-Time(1))+1);
+        if(max(isnan(Bottom_layer)) == 1)
+            Bottom_layer_interp = fillmissing(Bottom_layer,'linear');
+            bed_ind = round((Bottom_layer_interp(1,:)-Time(1))/(Time(2)-Time(1))+1);
+        else
+            bed_ind = round((Bottom_layer(1,:)-Time(1))/(Time(2)-Time(1))+1);
+        end
+         if(str2double(extractBefore(str(2),5)) < 2013)
+             shift = 10;
+         else
+             shift = 50;
+         end
+        mid_ind = round((surface_ind+shift));
+%         mid_ind = round((surface_ind+bed_ind)/2-shift);
+        columnPower = 10*log10(trapz(Data_rc(mid_ind:bed_ind-shift,:),1));
+        columnPowerRaw = 10*log10(trapz(Data(mid_ind:bed_ind-shift,:),1));
+
+        bedPowerUp = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_up,'nearest'));
+        bedPowerDw = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_dw,'nearest'));
+    %     surfPowerTop = sum(Data_rc((surface_ind + 1):(surface_ind + 100),:))/10;
+
+        strd_bedPower  = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Bottom_layer_strd,'nearest'));
+        strd_surfPower = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Surface_layer,'nearest'));
+        strd_bedPowerUp = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Bottom_layer_up,'nearest'));
+        strd_bedPowerDw = 10*log10(interp2(slowtime,Time,strd_Data_rc,slowtime,Bottom_layer_dw,'nearest'));
+
+    %     exclude extremely off bed values
+        bedPower(abs(bedPower - mean(bedPower,'omitnan')) > 50) = nan;
+    %     set mean of surfacePower,bedPowerUp/Dw to 0
+    %     surfPower  = surfPower - mean(surfPower,'omitnan');
+    %     bedPowerUp = bedPowerUp - mean(bedPowerUp,'omitnan');
+    %     bedPowerDw = bedPowerDw - mean(bedPowerDw,'omitnan');
+
+        x_along = zeros(size(xx));
+        for i = 2:length(xx)
+            x_along(i) = x_along(i-1) + sqrt((xx(i-1) - xx(i))^2 + (yy(i-1) - yy(i))^2); % get length for nonlinear routes
+        end   
+        clear i
+        if(qlook_load)
+            x_along_qlook = zeros(size(xx_q));
+            for i = 2:length(xx_q)
+                x_along_qlook(i) = x_along_qlook(i-1) + sqrt((xx_q(i-1) - xx_q(i))^2 + (yy_q(i-1) - yy_q(i))^2); % get length for nonlinear routes
+            end
+        end
+        clear i
+
+        if(max(isnan(Bottom_layer)) == 1)
+            smoothBed = movmean(Bottom_layer_interp,32); %movemean for 1km length
+        else
+            smoothBed = movmean(Bottom_layer,32); %movemean for 1km length
+        end
+        bedSlope  = (smoothBed(2:end)-smoothBed(1:end-1))./(x_along(2:end)-x_along(1:end-1))*radarSpeed;
+        bedAngle  = atan(bedSlope)*360/(2*pi);
+
+
+
+    %% Plotting
+        if(plotFigs == true)
+            if(ii == 1)
+                figure('Position',[300 300 2000 600]); %1400 900
+                tiledlayout(2,5,'TileSpacing','compact','Padding','compact')
+            end
+            ax(1) = nexttile(ii);
+                imagesc(x_along*1e-3,Time*radarSpeed,10*log10(Data),'HandleVisibility','off')
+                colormap(ax(1), (gray))
+                caxis([-180, -50])
+                hold on
+                plot(x_along*1e-3,Time(mid_ind)*radarSpeed,'color',rgb('robin egg blue'))
+                plot(x_along*1e-3,Time(bed_ind-shift)*radarSpeed,'color',rgb('red'))
+
+    %             plot(x_along*1e-3,Surface_layer*radarSpeed,'color',rgb('dark sky blue'))
+    %             plot(x_along*1e-3,Bottom_layer_up*radarSpeed,'color',rgb('dark lime green'))
+    %             plot(x_along*1e-3,Bottom_layer_dw*radarSpeed,'color',rgb('dark lavender'))
+                ylim([(min(Surface_layer) - 5e-6)*radarSpeed, (max(Bottom_layer)+1e-5)*radarSpeed])
+                title(erase(file,'radarData/Data_'),'Interpreter','none')
+    %             c = colorbar('southoutside');
+    %             c.Label.String = 'Power [dB]';
+                xlabel('Distance Along Track [km]')
+                ylabel('Range [m]')
+                yyaxis right
+                plot(x_along*1e-3,measures_interp('speed',xx,yy),'linewidth',2)
+        %         ylim([0 5000]) Don't force scale for single plots
+                ylabel('Surface Speed [m/yr]')
+                ax = gca;
+                ax.YAxis(1).Color = 'k'; %Force left to be black, default blue
+                ax.YAxis(1).Scale = 'linear';
+                ax.YAxis(2).Scale = 'linear';
+
+            ax(2) = nexttile(5+ii);            
+               title('Integrated column power')
+               meanPlot(x_along*1e-3,bedPower,15,'light rose','on')
+               hold on
+%                plot(x_along*1e-3,-atten_robin_r(xx',yy')'  + mean(atten_robin_r(xx',yy')),'-','linewidth',2,'color',rgb('sky blue'),'HandleVisibility','off')
+%                plot(x_along*1e-3,-atten_combo2_r(xx',yy')' + mean(atten_robin_r(xx',yy')),'-','linewidth',2,'color',rgb('ocean blue'),'HandleVisibility','off')
+%                plot(x_along*1e-3,-atten_combo_r(xx',yy')'  + mean(atten_robin_r(xx',yy')),'-','linewidth',2,'color',rgb('navy blue'),'HandleVisibility','off')
+
+               xlabel('Distance Along Track [km]')
+               ylabel('Bed Power [dB]')
+
+               yyaxis right
+
+               meanPlot(x_along*1e-3,columnPower,15,'light gray','on')
+
+               ylabel('Integrated Power [dB x range bin]')
+               axx = gca;
+               axx.YAxis(2).Color = rgb('dark gray');
+               clear axx
+%                legend('Itegrated Power','Bed Power')
+               xlim([0, x_along(end)]*1e-3) 
+               hold off
+        end
+    end
+end
+setFontSize(14)
+labelTiledLayout(gcf,18)
+drawnow
+if(savefig)
+    if(exist('figs_processing','dir')~= 7)
+        mkdir figs_processing
+    end    
+    %                 beep()
+    %                 disp('Please manually adjust position of legend before continuing')
+    %                 pause; %Manually adjust location of legend if issue
+    if(ii < 9)
+        savePng("figs_processing/Review2_0" + (ii+1));
+    else
+        savePng("figs_processing/Review2_" + (ii+1));
+    end
+
+    close %close figure after saving to save memory
+end
