@@ -1,5 +1,6 @@
 function [triAcc, triTemp] = loadALBMAP()
 % Loads accum and temp data for region, returns interp functions
+% Paul T Summers, 2020
 
 %% Check if data is locally held
 if(exist("ALBMAP/ALBMAPv1.nc",'file')~=2)

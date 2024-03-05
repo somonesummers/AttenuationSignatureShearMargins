@@ -1,5 +1,7 @@
 function [] = meanPlot(x,y,window,color,visible)
 %[] = meanPlot(x,y,window,color,[visible = 'off']) plots y, movmean (over window length) of y in color specified
+% Paul T Summers, 2023
+
 if(nargin == 4)
     visible = 'off';
 end

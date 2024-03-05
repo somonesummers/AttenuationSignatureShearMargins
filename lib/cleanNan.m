@@ -1,6 +1,8 @@
 function [out] = cleanNan(x,y,in)
 % function [out] = cleanNan(x,y,in)
-% Interpolates NAN values, works for all size arrays
+% Interpolates NAN values, works for all size arrays, fillingMissing() may often work better
+% Paul T Summers, 2022
+
     if (numel(x) ~= numel(y) || numel(in) ~= numel(x))
         error('inconsistent number of elements in arrays')
     end

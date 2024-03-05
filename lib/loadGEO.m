@@ -1,5 +1,6 @@
 function [Geo] = loadGEO()
 % Loads accum and temp data for region, returns interp functions
+% Paul T Summers, 2020
 
 %% Check if data is locally held
 if(exist("GEOTHERMAL/shen.hf.v1.xyz",'file')~=2)

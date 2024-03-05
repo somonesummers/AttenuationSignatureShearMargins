@@ -2,6 +2,8 @@ function [A] = calcAfromT(T)
 % [A] = calcAfromT(T)
 % Calculates prefactor A from temp input. From Cuffey & Patterson
 % Works for scalar, vector, matrix inputs
+% Paul T Summers, 2020
+
     T_star = 263;    %[k] transition temp
     A_star = 3.5e-25; %[Pa^-3 s^-1] base prefactor
     E = 1;           %Enhancement

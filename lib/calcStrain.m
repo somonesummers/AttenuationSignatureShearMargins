@@ -1,6 +1,8 @@
 function [int] = calcStrain(u,v,xy,dx)
-    % Calculates strain from any list of points, returns on intpolation
-    % function
+    %[int] = calcStrain(u,v,xy,dx)
+    % Calculates strain from any list of points, returns an interpolation function
+    % Paul T Summers, 2020
+
     % elements
     xi = min(xy(:,1))-dx:dx:max(xy(:,1))+dx;
     yi = (min(xy(:,2))-dx:dx:max(xy(:,2))+dx)';

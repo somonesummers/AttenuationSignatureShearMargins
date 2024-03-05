@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This file downloads the 10 radar lines considered in depth in Summers et al 2024
+# Requires about 600 MB of space.
+# Paul T Summers, 2024
+
 mkdir radarData_mv
 mkdir radarData_std
 mkdir radarData_qlook

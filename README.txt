@@ -6,10 +6,12 @@ You must download and install the following:
 
 MEaSUREs matlab plug in + data files
 	https://www.mathworks.com/matlabcentral/fileexchange/47329-measures
-BedMachine matlab plug in + data files
+BedMachine matlab plug in + data files (only needed for mapping)
 	https://www.mathworks.com/matlabcentral/fileexchange/69159-bedmachine
 cbrewer will greatly improve plotting
 	https://www.mathworks.com/matlabcentral/fileexchange/58350-cbrewer2
+Intuitive RGB color values from XKCD are used for plot colors
+	https://www.mathworks.com/matlabcentral/fileexchange/46872-intuitive-rgb-color-values-from-xkcd
 
 ALBMAP, Shen Geothermal data, and CReSIS data will auto-download for you upon first run using bash curl commands. 
 
@@ -22,6 +24,4 @@ Running "thermalPocketRunner.m" as configured now will produce Figure 2 in the m
 Running "plot3imageFigue.m" will produce figures 3,4 from the main text, though figure 3 will be produce in 2 separate plots of 3 radar lines each. 
 
 "plotQlookMvdr.m" and "plotVolumeScattering.m" were used to generate figures for responses to reviewers not used in the manuscript, but maybe useful to the user.
-
-For both of these scripts, if you select to save figures, MATLAB will pause for you to reposition the legends manually. You can do this by click and dragging the legend with your cursor. Then press any key to continue the script. 
 

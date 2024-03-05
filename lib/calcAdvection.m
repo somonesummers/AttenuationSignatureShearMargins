@@ -1,6 +1,7 @@
 function [lambda] = calcAdvection(T,u,v,xy,dx,rho_i,C_p)
 % calcAdvection(T,u,v,xy,dx,rho_i,C_p) 
 % Calculates advection term lambda, returns interpolation function
+% Paul T Summers, 2020
 
 %% Make Grids
 % *s is a scattered variable, *g is a gridded variable, *x or *y is a derivative

@@ -1,6 +1,8 @@
 function [t_z] = tempProfile(ep_dot, ep_star, Pe, Br, La, T_s, T_m, dz)
 % [t_z] = tempProfile(ep_dot, ep_star, Pe, Br, La, T_s, T_m, dz)
 % returns temp profile for region. Height dz in faction of H
+% Paul T Summers, 2020
+
     z = (0:dz:1).*ones(size(ep_dot,1),1.0/dz+1);
     T_s = T_s.*ones(size(z));
     t_z = T_m*ones(size(z));

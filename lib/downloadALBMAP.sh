@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Downloads atmospheric data into correct folder.
+# Paul T Summers, 2023
+
 mkdir ALBMAP
 
 cd ALBMAP

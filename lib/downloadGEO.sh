@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Downloads geothermal data into correct folder.
+# Paul T Summers, 2023
+
 mkdir GEOTHERMAL
 
 cd GEOTHERMAL

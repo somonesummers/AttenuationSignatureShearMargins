@@ -3,7 +3,7 @@ close all
 clear
 addpath lib
 
-%% This block lets you plot data for every line you have downloaded
+%% This section lets you plot data for every line you have downloaded
 % cd radarData_mv
 % files = dir;
 % directoryNames = {files.name};
