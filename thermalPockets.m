@@ -325,10 +325,14 @@ if(file ~= "")
             if(exist('figs','dir')~= 7)
                 mkdir figs
             end
-            beep()
-            disp('Please manually adjust position of legend before continuing')
-            pause; %Manually adjust location of legend if issue
-            savePng("figs/" + erase(file, ["radarData/","Data_"]))
+            if(manualCleanUp)
+                beep()
+                disp('Please manually adjust position of legend, then press any key to continue')
+                pause; %Manually adjust location of legend if needed
+                savePng("figs/" + erase(file, ["radarData/","Data_"]));
+            else
+                savePng("figs/" + erase(file, ["radarData/","Data_"]));
+            end
             close %close figure after saving to save memory
         end
     end

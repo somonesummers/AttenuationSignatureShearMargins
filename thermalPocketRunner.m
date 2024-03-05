@@ -39,8 +39,8 @@ end
 Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]          
 for ii = 1:length(directoryNames)
     clearvars -except ii directoryNames savefig plotFigs Geo Acc T_s manualCleanUp
-    savefig = true;
-    manualCleanUp = true;
+    savefig = false;  %autosaves figures for you
+    manualCleanUp = false;  %allows you to manually move legends before saving
     file = erase(directoryNames{ii}, [".mat"]);
     plotFigs = true;
     thermalPockets; %processing like Figure 2 of the text

@@ -521,7 +521,7 @@ if(file ~= "")
             end
             if(manualCleanUp)
                 beep()
-                disp('Please manually adjust position of legend before continuing')
+                disp('Please manually adjust position of legend, then press any key to continue')
                 pause; %Manually adjust location of legend if issue
                 if(ii < 9)
                     savePng("figs_processing/fs0" + (ii+1));
