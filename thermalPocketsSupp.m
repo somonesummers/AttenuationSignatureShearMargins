@@ -250,9 +250,23 @@ if(file ~= "")
     bedPower  = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer,'nearest'));
     surfPower = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Surface_layer,'nearest'));
     
-   
     surface_ind = round((Surface_layer(1,:)-Time(1))/(Time(2)-Time(1))+1);
-
+        if(max(isnan(Bottom_layer)) == 1)
+            Bottom_layer_interp = fillmissing(Bottom_layer,'linear');
+            bed_ind = round((Bottom_layer_interp(1,:)-Time(1))/(Time(2)-Time(1))+1);
+        else
+            bed_ind = round((Bottom_layer(1,:)-Time(1))/(Time(2)-Time(1))+1);
+        end
+         if(str2double(extractBefore(str(2),5)) < 2013)
+             shift = 10;
+         else
+             shift = 50;
+         end
+        mid_ind = round((surface_ind+shift)); %just below surface
+%         mid_ind = round((surface_ind+bed_ind)/2-shift); %lower half of colum
+        columnPower = 10*log10(trapz(Data_rc(mid_ind:bed_ind-shift,:),1));
+        columnPowerRaw = 10*log10(trapz(Data(mid_ind:bed_ind-shift,:),1));
+    
     bedPowerUp = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_up,'nearest'));
     bedPowerDw = 10*log10(interp2(slowtime,Time,Data_rc,slowtime,Bottom_layer_dw,'nearest'));
     
@@ -492,9 +506,18 @@ if(file ~= "")
 %             plot(x_along*1e-3,-atten_robin(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('sky blue'),'HandleVisibility','off')
 %             plot(x_along*1e-3,-atten_combo2(xx',yy')' + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('ocean blue'),'HandleVisibility','off')
 %             plot(x_along*1e-3,-atten_combo(xx',yy')'  + mean(atten_robin(xx',yy')),'linewidth',2,'color',rgb('navy blue'),'HandleVisibility','off')
+            
             title('Adjusted Bed Power')
             ylabel('Relative Power [dB]')
             xlabel('Distance Along Track [km]')
+
+            yyaxis right
+            plot(x_along*1e-3,columnPower,'color',rgb('light gray'),'HandleVisibility','off')
+            plot(x_along*1e-3,movmean(columnPower,15),'--','color',rgb('dark gray'),'linewidth',2)
+            axx = gca;
+            axx.YAxis(2).Color = rgb('gray');
+            ylabel('Integrated Power [dB x range bin]')
+            
             
             if(manualCleanUp)
                 legendLoc = 'SouthWest';
@@ -503,9 +526,9 @@ if(file ~= "")
             end
             
             if(qlook_load)
-                legend('Bed Power','Surface Adjustment','Clutter Adjustment','Slope Adjustment','Focusing Uncertainty','Location',legendLoc);
+                legend('Bed Power','Surface Est','Clutter Est','Slope Est','Focusing Unc','Location',legendLoc);
             else
-                legend('Bed Power','Surface Adjustment','Clutter Adjustment','Slope Adjustment','Location',legendLoc);
+                legend('Bed Power','Surface Est','Clutter Est','Slope Est','Location',legendLoc);
             end
             xlim([0, x_along(end)]*1e-3)
             
@@ -523,10 +546,10 @@ if(file ~= "")
                 beep()
                 disp('Please manually adjust position of legend, then press any key to continue')
                 pause; %Manually adjust location of legend if issue
-                if(ii < 9)
-                    savePng("figs_processing/fs0" + (ii+1));
+                if(ii < 10)
+                    savePng("figs_processing/fs0" + (ii));
                 else
-                    savePng("figs_processing/fs" + (ii+1));
+                    savePng("figs_processing/fs" + (ii));
                 end
             else
                 savePng("figs_processing/" + file);  
