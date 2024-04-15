@@ -12,8 +12,7 @@ addpath lib
 % cd ..
 
 %% Single by name runs, currently figure 2
-directoryNames = ["Data_20131126_01_029"];
-% All files in Supp 
+directoryNames = ["Data_20131126_01_029"]; 
 
 %% Bulk by name runs, currently configured for all files in manuscript
 % directoryNames = ["Data_20131126_01_029",... 
@@ -40,11 +39,13 @@ Geo = loadGEO(); %geothermal heat flux from Shen [W/m^2]
 for ii = 1:length(directoryNames)
     clearvars -except ii directoryNames savefig plotFigs Geo Acc T_s manualCleanUp
     savefig = false;  %autosaves figures for you
-    manualCleanUp = false;  %allows you to manually move legends before saving
+    manualCleanUp = true;  %allows you to manually move legends before saving
     file = erase(directoryNames{ii}, [".mat"]);
     plotFigs = true;
     thermalPockets; %processing like Figure 2 of the text
 %     thermalPocketsSupp; %processing like the supplemental figures
-    
+    if(plotFigs && manualCleanUp)
+        disp("Plotting Done!")
+    end        
 end
 
